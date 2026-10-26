@@ -1,0 +1,480 @@
+model:
+  provider: dashscope
+  name: qwen3.8-flash
+  endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1
+budget:
+  currency: CNY
+  monthly_cap: 20
+  warn_at: 16
+  daily_debate_cap: 8
+  daily_deepdive_cap: 2
+  dedup_hours: 2
+push:
+  primary: feishu
+  backup: telegram
+  feishu_webhook: ''
+  telegram_bot_token: ''
+  telegram_chat_id: ''
+monitor:
+  sources_priority:
+  - yahoo
+  - tencent
+  heartbeat_file: data/heartbeat.json
+  poll_interval_minutes: 15
+thresholds:
+  window: 过去 252 个交易日（截至 2026-10-26），每月滚动刷新
+  defaults:
+    A股个股:
+      regular: 4.0
+      emergency: 8.0
+    港股个股:
+      regular: 5.0
+      emergency: 8.0
+    美股个股:
+      regular: 5.0
+      emergency: 7.0
+    A股指数:
+      regular: 2.5
+      emergency: 4.5
+    港股指数:
+      regular: 2.5
+      emergency: 4.0
+    美股指数:
+      regular: 2.0
+      emergency: 3.5
+    黄金:
+      regular: 3.0
+      emergency: 4.0
+    原油:
+      regular: 5.0
+      emergency: 9.0
+    外汇:
+      regular: 0.5
+      emergency: 1.2
+  symbols:
+    600519.SS:
+      name: 贵州茅台
+      unit: pct
+      regular: 3.0
+      emergency: 3.86
+      sigma: 1.423
+    000858.SZ:
+      name: 五粮液
+      unit: pct
+      regular: 2.69
+      emergency: 4.87
+      sigma: 1.436
+    603259.SS:
+      name: 药明康德
+      unit: pct
+      regular: 5.87
+      emergency: 8.52
+      sigma: 2.682
+    601888.SS:
+      name: 中国中免
+      unit: pct
+      regular: 4.34
+      emergency: 9.39
+      sigma: 2.437
+    002050.SZ:
+      name: 三花智控
+      unit: pct
+      regular: 6.34
+      emergency: 9.1
+      sigma: 3.083
+    300015.SZ:
+      name: 爱尔眼科
+      unit: pct
+      regular: 3.4
+      emergency: 5.58
+      sigma: 1.723
+    300124.SZ:
+      name: 汇川技术
+      unit: pct
+      regular: 4.54
+      emergency: 6.48
+      sigma: 2.27
+    002594.SZ:
+      name: 比亚迪
+      unit: pct
+      regular: 3.6
+      emergency: 5.2
+      sigma: 1.781
+    000333.SZ:
+      name: 美的集团
+      unit: pct
+      regular: 2.44
+      emergency: 3.48
+      sigma: 1.251
+    600309.SS:
+      name: 万华化学
+      unit: pct
+      regular: 4.41
+      emergency: 6.99
+      sigma: 2.262
+    603882.SS:
+      name: 金域医学
+      unit: pct
+      regular: 5.18
+      emergency: 9.68
+      sigma: 2.598
+    300760.SZ:
+      name: 迈瑞医疗
+      unit: pct
+      regular: 3.25
+      emergency: 4.44
+      sigma: 1.696
+    300866.SZ:
+      name: 安克创新
+      unit: pct
+      regular: 6.04
+      emergency: 8.72
+      sigma: 2.924
+    002415.SZ:
+      name: 海康威视
+      unit: pct
+      regular: 3.66
+      emergency: 4.77
+      sigma: 1.729
+    603288.SS:
+      name: 海天味业
+      unit: pct
+      regular: 2.89
+      emergency: 4.37
+      sigma: 1.437
+    002371.SZ:
+      name: 北方华创
+      unit: pct
+      regular: 6.48
+      emergency: 9.45
+      sigma: 3.134
+    688012.SS:
+      name: 中微公司
+      unit: pct
+      regular: 8.19
+      emergency: 12.23
+      sigma: 3.93
+    300308.SZ:
+      name: 中际旭创
+      unit: pct
+      regular: 8.84
+      emergency: 13.22
+      sigma: 4.443
+    688065.SS:
+      name: 凯赛生物
+      unit: pct
+      regular: 4.07
+      emergency: 9.22
+      sigma: 2.515
+    688775.SS:
+      name: 影石创新
+      unit: pct
+      regular: 6.0
+      emergency: 8.96
+      sigma: 3.034
+    301606.SZ:
+      name: 绿联科技
+      unit: pct
+      regular: 6.72
+      emergency: 11.97
+      sigma: 3.557
+    600276.SS:
+      name: 恒瑞医药
+      unit: pct
+      regular: 4.55
+      emergency: 5.95
+      sigma: 2.08
+    688981.SS:
+      name: 中芯国际
+      unit: pct
+      regular: 6.04
+      emergency: 11.85
+      sigma: 3.398
+    300059.SZ:
+      name: 东方财富
+      unit: pct
+      regular: 4.23
+      emergency: 5.44
+      sigma: 1.986
+    300750.SZ:
+      name: 宁德时代
+      unit: pct
+      regular: 4.72
+      emergency: 7.34
+      sigma: 2.449
+    002352.SZ:
+      name: 顺丰控股
+      unit: pct
+      regular: 2.26
+      emergency: 3.42
+      sigma: 1.19
+    688235.SS:
+      name: 百济神州
+      unit: pct
+      regular: 5.63
+      emergency: 9.01
+      sigma: 2.923
+    688008.SS:
+      name: 澜起科技
+      unit: pct
+      regular: 9.14
+      emergency: 15.63
+      sigma: 4.702
+    688072.SS:
+      name: 拓荆科技
+      unit: pct
+      regular: 9.41
+      emergency: 14.14
+      sigma: 4.481
+    688041.SS:
+      name: 海光信息
+      unit: pct
+      regular: 6.89
+      emergency: 8.35
+      sigma: 3.656
+    301269.SZ:
+      name: 华大九天
+      unit: pct
+      regular: 7.78
+      emergency: 11.79
+      sigma: 3.594
+    000960.SZ:
+      name: 锡业股份
+      unit: pct
+      regular: 8.77
+      emergency: 10.01
+      sigma: 4.291
+    510300.SS:
+      name: 沪深300ETF
+      unit: pct
+      regular: 2.37
+      emergency: 3.07
+      sigma: 1.117
+    0700.HK:
+      name: 腾讯控股
+      unit: pct
+      regular: 3.93
+      emergency: 6.93
+      sigma: 2.09
+    9988.HK:
+      name: 阿里巴巴
+      unit: pct
+      regular: 4.95
+      emergency: 6.88
+      sigma: 2.775
+    0388.HK:
+      name: 香港交易所
+      unit: pct
+      regular: 2.5
+      emergency: 3.24
+      sigma: 1.276
+    6862.HK:
+      name: 海底捞
+      unit: pct
+      regular: 4.69
+      emergency: 8.23
+      sigma: 2.364
+    9880.HK:
+      name: 优必选
+      unit: pct
+      regular: 7.21
+      emergency: 10.07
+      sigma: 3.918
+    3692.HK:
+      name: 翰森制药
+      unit: pct
+      regular: 5.3
+      emergency: 7.45
+      sigma: 2.661
+    AAPL:
+      name: 苹果公司
+      unit: pct
+      regular: 3.15
+      emergency: 4.92
+      sigma: 1.514
+    TSLA:
+      name: 特斯拉
+      unit: pct
+      regular: 5.27
+      emergency: 7.55
+      sigma: 2.839
+    AMZN:
+      name: 亚马逊
+      unit: pct
+      regular: 3.96
+      emergency: 5.58
+      sigma: 2.188
+    NVDA:
+      name: 英伟达
+      unit: pct
+      regular: 4.41
+      emergency: 6.23
+      sigma: 2.369
+    MSFT:
+      name: 微软
+      unit: pct
+      regular: 3.55
+      emergency: 5.57
+      sigma: 2.074
+    AMD:
+      name: AMD
+      unit: pct
+      regular: 8.1
+      emergency: 13.45
+      sigma: 4.298
+    GOOG:
+      name: 谷歌
+      unit: pct
+      regular: 3.81
+      emergency: 6.58
+      sigma: 1.961
+    CME:
+      name: 芝商所
+      unit: pct
+      regular: 3.02
+      emergency: 4.48
+      sigma: 1.553
+    IBIT:
+      name: IBIT
+      unit: pct
+      regular: 5.93
+      emergency: 7.23
+      sigma: 2.835
+    COIN:
+      name: Coinbase
+      unit: pct
+      regular: 9.38
+      emergency: 13.43
+      sigma: 4.564
+    VOO:
+      name: 标普500ETF
+      unit: pct
+      regular: 1.59
+      emergency: 2.27
+      sigma: 0.803
+    VGT:
+      name: 科技ETF
+      unit: pct
+      regular: 2.87
+      emergency: 4.36
+      sigma: 1.576
+    BTC-USD:
+      name: 比特币
+      unit: pct
+      regular: 4.5
+      emergency: 6.6
+      sigma: 2.052
+    NQ=F:
+      name: 纳指期货
+      unit: pct
+      regular: 2.37
+      emergency: 3.36
+      sigma: 1.255
+    ES=F:
+      name: 标普期货
+      unit: pct
+      regular: 1.63
+      emergency: 2.4
+      sigma: 0.803
+    YM=F:
+      name: 道指期货
+      unit: pct
+      regular: 1.69
+      emergency: 2.34
+      sigma: 0.805
+    GC=F:
+      name: 黄金期货
+      unit: pct
+      regular: 3.47
+      emergency: 5.25
+      sigma: 1.751
+    SI=F:
+      name: 白银期货
+      unit: pct
+      regular: 7.45
+      emergency: 10.27
+      sigma: 4.122
+    HG=F:
+      name: 铜期货
+      unit: pct
+      regular: 3.38
+      emergency: 4.84
+      sigma: 1.724
+    ALI=F:
+      name: 铝期货
+      unit: pct
+      regular: 3.51
+      emergency: 5.01
+      sigma: 1.733
+    CL=F:
+      name: 原油WTI
+      unit: pct
+      regular: 6.99
+      emergency: 11.69
+      sigma: 3.507
+    BZ=F:
+      name: 原油布伦特
+      unit: pct
+      regular: 7.14
+      emergency: 11.1
+      sigma: 3.426
+    DX-Y.NYB:
+      name: 美元指数
+      unit: pct
+      regular: 0.68
+      emergency: 0.84
+      sigma: 0.323
+    ^TNX:
+      name: 10年美债收益率
+      unit: bp
+      regular_bp: 10
+      emergency_bp: 20
+      note: 利率指标，用基点阈值
+    USDCNH=X:
+      name: 离岸人民币
+      unit: pct
+      regular: 0.33
+      emergency: 0.54
+      sigma: 0.153
+      proxy: CNY=X（在岸代理，实施时走 AkShare/腾讯源补算）
+    CN=F:
+      name: A50期指
+      unit: pct
+      regular: 2.37
+      emergency: 3.07
+      proxy: 沪深300ETF（实施时走 AkShare/腾讯源补算）
+sentinel:
+  sources:
+  - 巨潮资讯公告
+  - 上交所公告
+  - 深交所公告
+  - 港交所披露易
+  - 财联社电报
+  - 华尔街见闻快讯
+  industry_keywords: []
+  grades:
+    emergency:
+    - 停牌
+    - 立案调查
+    - 业绩暴雷
+    - 重大重组
+    - 实控人变更
+    important:
+    - 财报
+    - 业绩预告
+    - 减持
+    - 增持
+    - 回购
+    - 问询函
+    routine:
+    - 日常公告
+    - 调研纪要
+gate_chain:
+  order:
+  - enabled
+  - not_expired
+  - trading_session
+  - daily_limit
+  - cooldown
+  - dedup
+  - quiet_hours

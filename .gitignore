@@ -1,0 +1,9 @@
+# 运行时生成（不进仓库）
+data/
+# Python 缓存
+__pycache__/
+*.pyc
+# 本地机密与日志（永不进仓库）
+.env
+*.log
+.DS_Store
