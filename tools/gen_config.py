@@ -33,6 +33,17 @@ DEFAULTS = {
 
 def main():
     data = json.load(open(SRC, encoding="utf-8"))
+    # 2026-10-27：industry_keywords 是用户已定稿的内容（见 config.yaml），
+    # 重新生成时必须保留，绝不能重置为空，否则会静默丢掉用户确认的关键词表。
+    out = os.path.join(REPO, "config.yaml")
+    kept_keywords = []
+    if os.path.exists(out):
+        try:
+            existing = yaml.safe_load(open(out, encoding="utf-8")) or {}
+            kept_keywords = (existing.get("sentinel") or {}).get(
+                "industry_keywords") or []
+        except Exception:
+            kept_keywords = []
     symbols = {}
     for d in data:
         if "error" in d:
@@ -76,7 +87,7 @@ def main():
         "sentinel": {
             "sources": ["巨潮资讯公告", "上交所公告", "深交所公告",
                         "港交所披露易", "财联社电报", "华尔街见闻快讯"],
-            "industry_keywords": [],
+            "industry_keywords": kept_keywords,
             "grades": {
                 "emergency": ["停牌", "立案调查", "业绩暴雷", "重大重组", "实控人变更"],
                 "important": ["财报", "业绩预告", "减持", "增持", "回购", "问询函"],
@@ -87,7 +98,6 @@ def main():
                                  "daily_limit", "cooldown", "dedup",
                                  "quiet_hours"]},
     }
-    out = os.path.join(REPO, "config.yaml")
     with open(out, "w", encoding="utf-8") as f:
         yaml.dump(config, f, allow_unicode=True, sort_keys=False)
     print(f"config.yaml 已生成，共 {len(symbols)} 只标的阈值 -> {out}")
