@@ -1,0 +1,73 @@
+# 监控轮询：每 15 分钟跑一轮 services/monitor.py（单次循环）。
+#
+# 设计要点（2026-10-29 部署准备）：
+# - secrets 不进仓库：运行期用仓库 secrets 注入 config.runtime.yaml，
+#   回写步骤只 git add data/，绝不含运行期配置。
+# - 状态回写：账本是门控（每日上限/冷却/去重）的唯一依据，跑者是临时的，
+#   故每轮把 data/heartbeat.json 与 data/ledger.db 强制加回 main
+#   （data/ 在 .gitignore 里，须用 git add -f）。
+# - 串行：concurrency + cancel-in-progress: false，避免两轮同时回写冲突。
+# - 辩论/深研/哨兵不在本 workflow：辩论未接触发器、LLM 层目前只走本机
+#   连接器、哨兵无 CLI 入口且 AkShare 在 Actions 网络下的可达性未验证。
+name: 监控轮询
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monitor-cycle
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 装依赖（监控核心只需 PyYAML）
+        run: pip install pyyaml
+      - name: 注入 secrets 到运行期配置（不进 git）
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import yaml
+          with open('config.yaml', encoding='utf-8') as f:
+              cfg = yaml.safe_load(f)
+          push = cfg.setdefault('push', {})
+          if os.environ.get('FEISHU_WEBHOOK'):
+              push['feishu_webhook'] = os.environ['FEISHU_WEBHOOK']
+          if os.environ.get('TELEGRAM_BOT_TOKEN'):
+              push['telegram_bot_token'] = os.environ['TELEGRAM_BOT_TOKEN']
+          if os.environ.get('TELEGRAM_CHAT_ID'):
+              push['telegram_chat_id'] = os.environ['TELEGRAM_CHAT_ID']
+          with open('config.runtime.yaml', 'w', encoding='utf-8') as f:
+              yaml.safe_dump(cfg, f, allow_unicode=True)
+          EOF
+      - name: 轮询一轮
+        run: python3 services/monitor.py --config config.runtime.yaml
+      - name: 回写心跳与账本
+        if: always()
+        run: |
+          git config user.name "investment-research-bot"
+          git config user.email "investment-research-bot@local"
+          git add -f data/heartbeat.json data/ledger.db 2>/dev/null || true
+          git diff --cached --quiet && echo "状态无变化，不提交" && exit 0
+          git commit -m "chore: monitor heartbeat $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase
+          git push
