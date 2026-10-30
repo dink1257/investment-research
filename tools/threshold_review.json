@@ -504,20 +504,6 @@
     "share_over_3pct": 1.98
   },
   {
-    "name": "海底捞",
-    "symbol": "6862.HK",
-    "type": "stock",
-    "n": 252,
-    "sigma": 2.364,
-    "p95": 4.692,
-    "p99": 8.233,
-    "sigma_196": 4.633,
-    "sigma_258": 6.098,
-    "p95_over_196sigma": 1.013,
-    "p99_over_258sigma": 1.35,
-    "share_over_3pct": 16.27
-  },
-  {
     "name": "优必选",
     "symbol": "9880.HK",
     "type": "stock",
@@ -530,20 +516,6 @@
     "p95_over_196sigma": 0.939,
     "p99_over_258sigma": 0.996,
     "share_over_3pct": 37.7
-  },
-  {
-    "name": "翰森制药",
-    "symbol": "3692.HK",
-    "type": "stock",
-    "n": 252,
-    "sigma": 2.661,
-    "p95": 5.3,
-    "p99": 7.453,
-    "sigma_196": 5.216,
-    "sigma_258": 6.866,
-    "p95_over_196sigma": 1.016,
-    "p99_over_258sigma": 1.086,
-    "share_over_3pct": 19.84
   },
   {
     "name": "苹果公司",
@@ -684,6 +656,34 @@
     "p95_over_196sigma": 1.049,
     "p99_over_258sigma": 1.141,
     "share_over_3pct": 47.62
+  },
+  {
+    "name": "Meta",
+    "symbol": "META",
+    "type": "stock",
+    "n": 252,
+    "sigma": 2.684,
+    "p95": 5.8,
+    "p99": 9.591,
+    "sigma_196": 5.261,
+    "sigma_258": 6.925,
+    "p95_over_196sigma": 1.102,
+    "p99_over_258sigma": 1.385,
+    "share_over_3pct": 17.06
+  },
+  {
+    "name": "Palantir",
+    "symbol": "PLTR",
+    "type": "stock",
+    "n": 252,
+    "sigma": 3.825,
+    "p95": 6.992,
+    "p99": 9.753,
+    "sigma_196": 7.497,
+    "sigma_258": 9.869,
+    "p95_over_196sigma": 0.933,
+    "p99_over_258sigma": 0.988,
+    "share_over_3pct": 31.75
   },
   {
     "name": "标普500ETF",
