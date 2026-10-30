@@ -268,24 +268,12 @@ thresholds:
       regular: 2.5
       emergency: 3.24
       sigma: 1.276
-    6862.HK:
-      name: 海底捞
-      unit: pct
-      regular: 4.69
-      emergency: 8.23
-      sigma: 2.364
     9880.HK:
       name: 优必选
       unit: pct
       regular: 7.21
       emergency: 10.07
       sigma: 3.918
-    3692.HK:
-      name: 翰森制药
-      unit: pct
-      regular: 5.3
-      emergency: 7.45
-      sigma: 2.661
     AAPL:
       name: 苹果公司
       unit: pct
@@ -346,6 +334,18 @@ thresholds:
       regular: 9.38
       emergency: 13.43
       sigma: 4.564
+    META:
+      name: Meta
+      unit: pct
+      regular: 5.8
+      emergency: 9.59
+      sigma: 2.684
+    PLTR:
+      name: Palantir
+      unit: pct
+      regular: 6.99
+      emergency: 9.75
+      sigma: 3.825
     VOO:
       name: 标普500ETF
       unit: pct
@@ -451,7 +451,52 @@ sentinel:
   - 港交所披露易
   - 财联社电报
   - 华尔街见闻快讯
-  industry_keywords: []
+  industry_keywords:
+  - group: 锂电与新能源
+    keywords:
+    - 固态电池
+    - 动力电池
+    - 锂电
+    - 储能
+    - 磷酸铁锂
+    - 三元锂
+  - group: 半导体与AI算力
+    keywords:
+    - 半导体设备
+    - 光刻
+    - 刻蚀
+    - 薄膜沉积
+    - 晶圆代工
+    - 先进封装
+    - EDA
+    - 内存接口
+    - DDR5
+    - 半导体材料
+    - 光模块
+    - CPO
+    - AI 服务器
+  - group: 创新药与医疗
+    keywords:
+    - 创新药
+    - CXO
+    - 生物药
+    - 医疗器械
+    - 体外诊断
+  - group: 消费与食品
+    keywords:
+    - 白酒
+    - 调味品
+    - 餐饮消费
+  - group: 机器人与智能制造
+    keywords:
+    - 人形机器人
+    - 工业机器人
+    - 机器视觉
+    - 精密制造
+  - group: 有色与贵金属
+    keywords:
+    - 锡
+    - 稀土
   grades:
     emergency:
     - 停牌
