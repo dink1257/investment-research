@@ -1,45 +1,19 @@
 {
-  "last_run_ts": "2026-10-30T11:27:33.457606+08:00",
+  "last_run_ts": "2026-10-30T17:45:51.914491+08:00",
   "status": "partial",
-  "ts": "2026-10-30T11:27:33.457606+08:00",
+  "ts": "2026-10-30T17:45:51.914491+08:00",
   "checked": 65,
   "snapshots": 63,
-  "triggers": 4,
-  "alerts_sent": 2,
+  "triggers": 7,
+  "alerts_sent": 0,
   "dry_run_alerts": 0,
   "blocked": {
-    "trading_session": 2
+    "trading_session": 7
   },
-  "disagreements": [
-    "000960.SZ",
-    "002050.SZ",
-    "002371.SZ",
-    "300015.SZ",
-    "300059.SZ",
-    "300124.SZ",
-    "300308.SZ",
-    "300750.SZ",
-    "300866.SZ",
-    "301269.SZ",
-    "301606.SZ",
-    "510300.SS",
-    "600276.SS",
-    "600309.SS",
-    "601888.SS",
-    "603259.SS",
-    "603882.SS",
-    "688008.SS",
-    "688012.SS",
-    "688041.SS",
-    "688065.SS",
-    "688072.SS",
-    "688235.SS",
-    "688775.SS",
-    "688981.SS"
-  ],
+  "disagreements": [],
   "errors": [
     "CN=F: 行情全失败",
     "USDCNH=X: 行情全失败"
   ],
-  "duration_s": 4.1
+  "duration_s": 2.4
 }
