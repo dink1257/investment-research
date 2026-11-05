@@ -108,15 +108,19 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
         title = f"异动提醒：{name}（{symbol}）{level}"
         content = f"现价 {quote['price']}，前收 {quote['prev_close']}，" \
                   f"变动 {move_txt}，来源 {quote['source']}。"
-        result = push_mod.send_alert(config, title, content, dry_run=dry_run)
+        result = push_mod.send_alert(config, title, content, level=level,
+                                     dry_run=dry_run)
         is_dry = bool(result.get("dry_run"))
+        delivered = bool(result.get("delivered"))
         ledger_mod.record_alert(conn, ts, symbol, level, pct_for_row, title,
-                                pushed=0 if is_dry else 1,
+                                pushed=1 if delivered else 0,
                                 dry_run=1 if is_dry else 0)
         if is_dry:
             summary["dry_run_alerts"] += 1
-        else:
+        elif delivered:
             summary["alerts_sent"] += 1
+        else:
+            summary["errors"].append(f"{symbol}: 推送全部失败（{level}）")
     summary["duration_s"] = round(time.time() - started, 1)
     status = "ok" if not summary["errors"] else "partial"
     detail = json.dumps(summary, ensure_ascii=False)
