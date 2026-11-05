@@ -1,21 +1,23 @@
 {
-  "last_run_ts": "2026-11-05T07:25:34.914741+08:00",
+  "last_run_ts": "2026-11-05T11:39:42.204320+08:00",
   "status": "partial",
-  "ts": "2026-11-05T07:25:34.914741+08:00",
+  "ts": "2026-11-05T11:39:42.204320+08:00",
   "checked": 65,
   "snapshots": 63,
-  "triggers": 20,
-  "alerts_sent": 4,
+  "triggers": 10,
+  "alerts_sent": 3,
   "dry_run_alerts": 0,
   "blocked": {
-    "trading_session": 16
+    "trading_session": 7
   },
   "disagreements": [
-    "510300.SS"
+    "300866.SZ",
+    "510300.SS",
+    "688072.SS"
   ],
   "errors": [
     "CN=F: 行情全失败",
     "USDCNH=X: 行情全失败"
   ],
-  "duration_s": 6.2
+  "duration_s": 4.8
 }
