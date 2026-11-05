@@ -10,11 +10,16 @@ budget:
   daily_deepdive_cap: 2
   dedup_hours: 2
 push:
+  # 分级（2026-10-30 定稿；2026-11-05 用户确认不用 Telegram）：紧急飞书+Bark，
+  # 常规只飞书（失败才 Bark）。bark_server/bark_key 由仓库 secrets 注入，
+  # 绝不写明文进仓库。
   primary: feishu
   backup: telegram
   feishu_webhook: ''
   telegram_bot_token: ''
   telegram_chat_id: ''
+  bark_server: ''
+  bark_key: ''
 monitor:
   sources_priority:
   - yahoo
