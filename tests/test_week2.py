@@ -186,7 +186,7 @@ def main():
     conn = ledger_mod.init_db(":memory:")
     pushes = []
 
-    def recorder(config, title, content, dry_run=False):
+    def recorder(config, title, content, dry_run=False, level="regular"):
         pushes.append((title, content))
         return {"channel": "test", "dry_run": True}
 
@@ -229,7 +229,8 @@ def main():
     status_path = os.path.join(tmp, "sources.json")
     alerts = []
 
-    def alert_recorder(config, title, content, dry_run=False):
+    def alert_recorder(config, title, content, dry_run=False,
+                         level="regular"):
         alerts.append(title)
         return {"channel": "test", "dry_run": True}
 
