@@ -9,12 +9,20 @@
 # - 串行：concurrency + cancel-in-progress: false，避免两轮同时回写冲突。
 # - 辩论/深研/哨兵不在本 workflow：辩论未接触发器、LLM 层目前只走本机
 #   连接器、哨兵无 CLI 入口且 AkShare 在 Actions 网络下的可达性未验证。
+# - 测试推送（2026-11-05 Bark 接线）：workflow_dispatch 的 test_push 输入
+#   为 true 时，只跑 tools/test_push.py 发一条紧急档测试消息（飞书 + Bark），
+#   不跑行情轮询、不写账本；定时触发永远跑轮询。
 name: 监控轮询
 
 on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      test_push:
+        description: '发送测试推送（飞书 + Bark，紧急档）'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -43,6 +51,8 @@ jobs:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BARK_SERVER: ${{ secrets.BARK_SERVER }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
         run: |
           python3 - <<'EOF'
           import os
@@ -56,11 +66,19 @@ jobs:
               push['telegram_bot_token'] = os.environ['TELEGRAM_BOT_TOKEN']
           if os.environ.get('TELEGRAM_CHAT_ID'):
               push['telegram_chat_id'] = os.environ['TELEGRAM_CHAT_ID']
+          if os.environ.get('BARK_SERVER'):
+              push['bark_server'] = os.environ['BARK_SERVER']
+          if os.environ.get('BARK_KEY'):
+              push['bark_key'] = os.environ['BARK_KEY']
           with open('config.runtime.yaml', 'w', encoding='utf-8') as f:
               yaml.safe_dump(cfg, f, allow_unicode=True)
           EOF
       - name: 轮询一轮
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.test_push != true }}
         run: python3 services/monitor.py --config config.runtime.yaml
+      - name: 测试推送（飞书 + Bark）
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_push == true }}
+        run: python3 tools/test_push.py --config config.runtime.yaml
       - name: 回写心跳与账本
         if: always()
         run: |
