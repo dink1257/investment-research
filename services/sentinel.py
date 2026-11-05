@@ -131,7 +131,7 @@ def process_items(conn, config, items, now, push_fn=None, llm_call=None):
         if grade == "emergency":
             push(config, f"哨兵紧急：{title}",
                  f"来源：{item.get('source', '')} {item.get('url', '')}",
-                 dry_run=False)
+                 dry_run=False, level="emergency")
             ledger_mod.mark_sentinel_pushed(conn, row_id)
             counts["pushed_emergency"] += 1
         elif grade == "important":
@@ -146,7 +146,8 @@ def process_items(conn, config, items, now, push_fn=None, llm_call=None):
                         content = f"{summary}\n{content}"
                     except Exception:  # noqa: BLE001 - 摘要失败改推标题原文
                         pass
-            push(config, f"哨兵重要：{title}", content, dry_run=False)
+            push(config, f"哨兵重要：{title}", content, dry_run=False,
+                 level="regular")
             ledger_mod.mark_sentinel_pushed(conn, row_id)
             counts["pushed_important"] += 1
         else:
