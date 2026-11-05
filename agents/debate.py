@@ -4,7 +4,7 @@
 （DeepSeek 155/165、Qwen 147/165，零事实错误）；多方→空方→互驳→裁判
 四轮结构在提示词内完整保留。拆成四次调用成本翻几倍且未经验证。
 流程（方案 §3.1）：预算检查（含同标的 2 小时去重）-> 哨兵账本取诱因
-（近 7 天，无则写明暂无）-> 调 LLM（4000 上限）-> 围栏剥离解析
+（近 7 天，无则写明暂无）-> 调 LLM（6000 上限，2026-10-30 新风格输出变长后由 4000 上调，防截断）-> 围栏剥离解析
 （失败重试一次，再失败记账并告警，不发半成品）-> 信心降级
 （confidence ≤2 自动降为"观望"，不给方向建议，方案 §5）-> 写账本 + 成本。
 """
@@ -78,7 +78,7 @@ def run_debate(conn, config, symbol, name, move_text, level, move_value,
     verdict = None
     last_error = ""
     for _ in range(2):  # 解析失败重试一次
-        text, _usage, cost = call(llm_mod.SYSTEM_PROMPT, prompt, 4000)
+        text, _usage, cost = call(llm_mod.SYSTEM_PROMPT, prompt, 6000)
         total_cost += cost
         try:
             verdict = _validate(llm_mod.parse_json(text))
