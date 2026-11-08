@@ -32,7 +32,7 @@ def main():
     hb = os.path.join(tmp, "heartbeat.json")
 
     # ---- 常规触发 -> dry-run 预警 + 快照 + 心跳 ----
-    mon.fetch_symbol = lambda s: (
+    mon.fetch_symbol = lambda s, proxies=None: (
         {"symbol": s, "price": 105.0, "prev_close": 100.0, "pct": 5.0,
          "source": "yahoo"}, False, False) if s == "BTC-USD" else (None, False,
                                                                False)
@@ -64,7 +64,7 @@ def main():
     _orig_session = mon.gates.in_trading_session
     mon.gates.in_trading_session = lambda *a, **k: True
     try:
-        mon.fetch_symbol = lambda s: (
+        mon.fetch_symbol = lambda s, proxies=None: (
             {"symbol": s, "price": 5.15, "prev_close": 5.00, "pct": 3.0,
              "source": "yahoo"}, False, False)
         conn2 = ledger_mod.init_db(":memory:")
@@ -76,7 +76,7 @@ def main():
         mon.gates.in_trading_session = _orig_session
 
     # ---- 双源不一致 -> 只记账本（disagreement），不推送 ----
-    mon.fetch_symbol = lambda s: (
+    mon.fetch_symbol = lambda s, proxies=None: (
         {"symbol": s, "price": 110.0, "prev_close": 100.0, "pct": 10.0,
          "source": "yahoo"}, True, False)
     conn3 = ledger_mod.init_db(":memory:")
@@ -87,7 +87,7 @@ def main():
     assert snap[4] == "disagreement", snap
 
     # ---- 行情全失败 -> 计 error，不写快照 ----
-    mon.fetch_symbol = lambda s: (None, False, False)
+    mon.fetch_symbol = lambda s, proxies=None: (None, False, False)
     conn4 = ledger_mod.init_db(":memory:")
     summary5 = mon.run_cycle(make_config(hb), conn4, ["BTC-USD"], dry_run=True)
     assert summary5["errors"] == ["BTC-USD: 行情全失败"], summary5
