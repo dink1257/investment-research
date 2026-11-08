@@ -1,7 +1,7 @@
 {
-  "last_run_ts": "2026-11-09T06:21:04.301081+08:00",
+  "last_run_ts": "2026-11-09T06:51:04.948670+08:00",
   "status": "ok",
-  "ts": "2026-11-09T06:21:04.301081+08:00",
+  "ts": "2026-11-09T06:51:04.948670+08:00",
   "checked": 65,
   "snapshots": 65,
   "triggers": 4,
@@ -18,5 +18,5 @@
   "debates_errored": 0,
   "verdicts_pushed": 0,
   "verdicts_dry_run": 0,
-  "duration_s": 2.8
+  "duration_s": 3.4
 }
