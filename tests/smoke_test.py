@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import yaml
 
 from core.quotes import (DisagreementError, cross_validate, fetch,
-                         fetch_tencent, fetch_yahoo)
+                         fetch_tencent, fetch_validated, fetch_yahoo)
 from core.thresholds import classify
 from ledger import ledger
 from push import push
@@ -68,6 +68,20 @@ def main():
     from core.quotes import bp_change
     print(f"^TNX 实测：收益率 {q['price']} 前值 {q['prev_close']} "
           f"变化 {bp_change(q['prev_close'], q['price']):.1f}bp")
+
+    # 6. 代理标的实测（CN=F、USDCNH=X 原标的在 Yahoo 上无数据，见 proxy_note）
+    proxies = {s: cfg["proxy_symbol"]
+               for s, cfg in config["thresholds"]["symbols"].items()
+               if cfg.get("proxy_symbol")}
+    assert proxies == {"USDCNH=X": "CNY=X", "CN=F": "510300.SS"}, proxies
+    for symbol, proxy in proxies.items():
+        q, dis, missing = fetch_validated(symbol, proxies)
+        assert q is not None, f"{symbol} 代理取数失败"
+        assert q["symbol"] == symbol and q["proxy"] == proxy, q
+        assert abs(q["pct"]) < 30, f"{symbol} 代理涨跌幅异常：{q['pct']}"
+        print(f"代理实测 {symbol}（经 {proxy}）：现价 {q['price']} "
+              f"前收 {q['prev_close']} 涨跌 {q['pct']:.2f}% "
+              f"disagreement={dis} backup_missing={missing}")
     print("冒烟测试全部通过")
 
 
