@@ -441,13 +441,15 @@ thresholds:
       regular: 0.33
       emergency: 0.54
       sigma: 0.153
-      proxy: CNY=X（在岸代理，实施时走 AkShare/腾讯源补算）
+      proxy_symbol: CNY=X
+      proxy_note: Yahoo 的 USDCNH=X 只返回 1 根日K、无法推导前收（2026-11-09 实测），改取 CNY=X 日K；CNY=X 近 1 年实测 p95 0.33%/p99 0.45%，与阈值 0.33/0.54 基本一致
     CN=F:
       name: A50期指
       unit: pct
       regular: 2.37
       emergency: 3.07
-      proxy: 沪深300ETF（实施时走 AkShare/腾讯源补算）
+      proxy_symbol: 510300.SS
+      proxy_note: Yahoo 已下架 CN=F（2026-11-09 实测 Not Found），改取 510300.SS 日K；510300 近 1 年实测 p95 2.35%/p99 3.10%，与阈值 2.37/3.07 基本一致
 sentinel:
   sources:
   - 巨潮资讯公告
