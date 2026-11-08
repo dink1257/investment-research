@@ -14,6 +14,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,30 +28,18 @@ BEIJING = ZoneInfo("Asia/Shanghai")
 TOLERANCE_PP = 0.5
 
 
-def fetch_symbol(symbol):
+def fetch_symbol(symbol, proxies=None):
     """拉取一标的。返回 (quote, disagreement, backup_missing)。
 
     A 股走双源：Yahoo 为主、腾讯为备，涨跌幅差 > 0.5pp 即不一致；
     非 A 股走主备链（Yahoo 优先，失败则腾讯——腾讯仅支持 A 股，
     故非 A 股实际只有 Yahoo 一源，失败即 QuoteError）。
     quote 为 None 表示全部行情源失败（调用方计 error，不写快照）。
+    proxies 是 {原标的: 代理标的}（取自 config.yaml 的 proxy_symbol）：
+    原标的取不到时改拉代理，quote 里带 "proxy" 字段；代理是 A 股时
+    同样走双源校验。
     """
-    if symbol.endswith((".SS", ".SZ")):
-        try:
-            yahoo = quotes.fetch_yahoo(symbol)
-        except quotes.QuoteError:
-            return None, False, False
-        try:
-            tencent = quotes.fetch_tencent(symbol)
-        except quotes.QuoteError:
-            return yahoo, False, True
-        if abs(yahoo["pct"] - tencent["pct"]) > TOLERANCE_PP:
-            return yahoo, True, False
-        return yahoo, False, False
-    try:
-        return quotes.fetch(symbol), False, False
-    except quotes.QuoteError:
-        return None, False, False
+    return quotes.fetch_validated(symbol, proxies)
 
 
 def run_cycle(config, conn, symbols, dry_run=False, workers=10):
@@ -59,11 +48,14 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
     now = datetime.now(BEIJING)
     ts = now.isoformat()
     sym_cfg = config.get("thresholds", {}).get("symbols", {})
+    proxies = {s: cfg["proxy_symbol"] for s, cfg in sym_cfg.items()
+               if cfg.get("proxy_symbol")}
     summary = {"ts": ts, "checked": 0, "snapshots": 0, "triggers": 0,
                "alerts_sent": 0, "dry_run_alerts": 0, "blocked": {},
                "disagreements": [], "errors": []}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        fetched = list(pool.map(fetch_symbol, symbols))
+        fetched = list(pool.map(
+            partial(fetch_symbol, proxies=proxies), symbols))
     for symbol, (quote, disagreement, backup_missing) in zip(symbols,
                                                              fetched):
         cfg = sym_cfg.get(symbol)
@@ -108,6 +100,8 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
         title = f"异动提醒：{name}（{symbol}）{level}"
         content = f"现价 {quote['price']}，前收 {quote['prev_close']}，" \
                   f"变动 {move_txt}，来源 {quote['source']}。"
+        if quote.get("proxy"):
+            content += f"（行情取自代理 {quote['proxy']}，原标的暂无数据）"
         result = push_mod.send_alert(config, title, content, level=level,
                                      dry_run=dry_run)
         is_dry = bool(result.get("dry_run"))
