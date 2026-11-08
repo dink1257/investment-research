@@ -12,13 +12,20 @@
   取不到只记源状态、不造假条目；部署环境（Actions）网络不同，到时再验 live。
   连续 2 天取不到数据的源触发一次告警（方案 §3.6 维护对策）。
 """
+import argparse
 import difflib
 import json
 import os
 import re
 import string
+import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+# 以脚本方式运行时（python3 services/sentinel.py）也要能 import 同级包
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import yaml  # noqa: E402
 
 from agents import llm as llm_mod
 from core import budget as budget_mod
@@ -182,6 +189,29 @@ def _rows_to_items(df, source):
     return items
 
 
+def fetch_all(symbol, date_str):
+    """合成抓取：东财新闻 + 当日公告，返回 (items, status)。
+
+    任一源 ok 即 ok；两源都失败才返回失败状态（不造假条目）。
+    非 A/港股（无 .SS/.SZ/.HK 后缀）不在 AkShare 覆盖范围，返回
+    not_applicable——调用方不把它记为失败，否则美股/外汇/指数标的
+    两天后会误触发一堆数据源告警。
+    """
+    if not symbol.endswith((".SS", ".SZ", ".HK")):
+        return [], "not_applicable"
+    code6 = _code_of(symbol)
+    items, statuses = [], []
+    news, st1 = fetch_akshare_news(code6)
+    items.extend(news)
+    statuses.append(st1)
+    notices, st2 = fetch_akshare_notices(code6, date_str)
+    items.extend(notices)
+    statuses.append(st2)
+    if "ok" in statuses:
+        return items, "ok"
+    return [], "; ".join(statuses)
+
+
 def fetch_akshare_news(code6):
     """东财个股新闻（AkShare stock_news_em）。返回 (items, status)。
     本环境实测超时 -> status 为 unavailable，items 为空，不造假。"""
@@ -240,6 +270,9 @@ def run_sentinel(conn, config, now, push_fn=None, llm_call=None,
                   "ledger_only": 0, "skipped_unmatched": 0, "skipped_dup": 0}
     for symbol in symbols_cfg:
         items, src_status = fetch_fn(symbol)
+        if src_status == "not_applicable":
+            # 不在抓取覆盖范围（非 A/港股），既不记失败也不告警
+            continue
         st = status.get(symbol, {"fail_days": 0, "alerted": False,
                                  "last_seen": ""})
         if src_status == "ok":
@@ -263,3 +296,56 @@ def run_sentinel(conn, config, now, push_fn=None, llm_call=None,
     return {"counts": all_counts,
             "sources": {s: ("ok" if v.get("fail_days", 0) == 0 else "fail")
                         for s, v in status.items()}}
+
+
+def _dry_run_push(config, title, content, dry_run=False, level="regular"):
+    """dry-run 用的推送桩：走 send_alert 的 dry-run 路径，只返回 payload，
+    不真发。"""
+    return push_mod.send_alert(config, title, content, dry_run=True,
+                               level=level)
+
+
+def main():
+    """哨兵 CLI（单次循环，供定时任务调用）。
+
+    用法：python3 services/sentinel.py [--config ...] [--db ...]
+              [--symbols 300750.SZ,600519.SS] [--dry-run]
+    dry-run：只记账本、不真推、不调 LLM 做摘要（省成本）。
+    源状态文件 data/sentinel_sources.json 与账本一起回写（见 workflow）。
+    """
+    parser = argparse.ArgumentParser(description="新闻哨兵（单次循环）")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parser.add_argument("--config", default=os.path.join(root, "config.yaml"))
+    parser.add_argument("--db", default=os.path.join(root, "data",
+                                                     "ledger.db"))
+    parser.add_argument("--symbols", default="",
+                        help="逗号分隔的子集，用于测试；缺省全量")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="只记账本、不真推、不调 LLM 做摘要")
+    args = parser.parse_args()
+    with open(args.config, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+    if symbols:
+        import copy
+        config = copy.deepcopy(config)
+        all_syms = config.get("thresholds", {}).get("symbols", {})
+        config["thresholds"]["symbols"] = {
+            s: all_syms[s] for s in symbols if s in all_syms}
+    os.makedirs(os.path.dirname(args.db), exist_ok=True)
+    conn = ledger_mod.init_db(args.db)
+    now = datetime.now(BEIJING)
+    date_str = now.strftime("%Y%m%d")
+    status_path = os.path.join(root, "data", "sentinel_sources.json")
+    res = run_sentinel(
+        conn, config, now,
+        push_fn=_dry_run_push if args.dry_run else None,
+        llm_call=None if args.dry_run else llm_mod.call_qwen,
+        fetch_fn=lambda symbol: fetch_all(symbol, date_str),
+        status_path=status_path)
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
