@@ -59,14 +59,21 @@ def main():
     assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
 
     # ---- 基点型标的（^TNX +15bp -> 常规档）----
-    mon.fetch_symbol = lambda s: (
-        {"symbol": s, "price": 5.15, "prev_close": 5.00, "pct": 3.0,
-         "source": "yahoo"}, False, False)
-    conn2 = ledger_mod.init_db(":memory:")
-    summary3 = mon.run_cycle(make_config(hb), conn2, ["^TNX"], dry_run=True)
-    assert summary3["dry_run_alerts"] == 1, summary3
-    row = conn2.execute("SELECT level FROM alerts").fetchone()
-    assert row[0] == "regular", row
+    # ^TNX 是期货/外汇类，只在工作日放行；测试不依赖真实日期，强制放行
+    # 交易时段门（否则周末跑测试会失败）。
+    _orig_session = mon.gates.in_trading_session
+    mon.gates.in_trading_session = lambda *a, **k: True
+    try:
+        mon.fetch_symbol = lambda s: (
+            {"symbol": s, "price": 5.15, "prev_close": 5.00, "pct": 3.0,
+             "source": "yahoo"}, False, False)
+        conn2 = ledger_mod.init_db(":memory:")
+        summary3 = mon.run_cycle(make_config(hb), conn2, ["^TNX"], dry_run=True)
+        assert summary3["dry_run_alerts"] == 1, summary3
+        row = conn2.execute("SELECT level FROM alerts").fetchone()
+        assert row[0] == "regular", row
+    finally:
+        mon.gates.in_trading_session = _orig_session
 
     # ---- 双源不一致 -> 只记账本（disagreement），不推送 ----
     mon.fetch_symbol = lambda s: (
@@ -85,6 +92,23 @@ def main():
     summary5 = mon.run_cycle(make_config(hb), conn4, ["BTC-USD"], dry_run=True)
     assert summary5["errors"] == ["BTC-USD: 行情全失败"], summary5
     assert summary5["snapshots"] == 0, summary5
+
+    # ---- 退出码方案 C（只在全部失败时返回非零）----
+    def _s(**kw):
+        base = {"checked": 1, "snapshots": 1, "triggers": 0,
+                "alerts_sent": 0, "dry_run_alerts": 0, "blocked": {}}
+        base.update(kw)
+        return base
+    assert mon.is_total_failure(_s(checked=1, snapshots=0)) is True  # 行情全失败
+    assert mon.is_total_failure(_s()) is False  # 正常一轮
+    assert mon.is_total_failure(_s(triggers=1, blocked={"cooldown": 1})) \
+        is False  # 触发被门控拦住，不算推送失败
+    assert mon.is_total_failure(_s(triggers=1)) is True  # 放行但一条没送达
+    assert mon.is_total_failure(_s(triggers=1, dry_run_alerts=1)) \
+        is False  # dry-run 不算推送失败
+    assert mon.is_total_failure(_s(triggers=2, alerts_sent=1)) \
+        is False  # 部分送达不算全部失败
+    assert mon.is_total_failure(_s(checked=0, snapshots=0)) is False  # 空表
     print("test_monitor: all passed")
 
 
