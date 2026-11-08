@@ -1,0 +1,82 @@
+# 新闻哨兵：每天两轮 services/sentinel.py（单次循环）。
+#
+# 设计要点（2026-11-09 新建）：
+# - 抓取走 AkShare（东财新闻 + 公告）；本机网络不通，Actions 网络待首跑验证。
+#   取不到只记源状态、不造假条目；连续 2 天失败才告警一次。
+# - 非 A/港股不在 AkShare 覆盖范围，不记失败、不告警。
+# - 推送走分级通道（紧急飞书+Bark，重要只飞书），与监控同一套；
+#   一般只记账本不推。摘要只对推送项调 LLM（月成本不到 ¥0.2）。
+# - LLM 凭据走环境变量 DASHSCOPE_API_KEY（与监控同一枚仓库 secret）。
+# - 状态回写：账本 + data/sentinel_sources.json 一起加回 main
+#   （data/ 在 .gitignore 里，须用 git add -f）。
+# - 定时：每天 09:00 / 21:00（北京时间），覆盖盘前公告与当日新闻。
+name: 新闻哨兵
+
+on:
+  schedule:
+    - cron: '0 1,13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sentinel-cycle
+  cancel-in-progress: false
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 检出
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: 装 Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: 装依赖
+        run: pip install pyyaml akshare
+      - name: 注入 secrets 到运行期配置（不进 git）
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BARK_SERVER: ${{ secrets.BARK_SERVER }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import yaml
+          with open('config.yaml', encoding='utf-8') as f:
+              cfg = yaml.safe_load(f)
+          push = cfg.setdefault('push', {})
+          if os.environ.get('FEISHU_WEBHOOK'):
+              push['feishu_webhook'] = os.environ['FEISHU_WEBHOOK']
+          if os.environ.get('TELEGRAM_BOT_TOKEN'):
+              push['telegram_bot_token'] = os.environ['TELEGRAM_BOT_TOKEN']
+          if os.environ.get('TELEGRAM_CHAT_ID'):
+              push['telegram_chat_id'] = os.environ['TELEGRAM_CHAT_ID']
+          if os.environ.get('BARK_SERVER'):
+              push['bark_server'] = os.environ['BARK_SERVER']
+          if os.environ.get('BARK_KEY'):
+              push['bark_key'] = os.environ['BARK_KEY']
+          with open('config.runtime.yaml', 'w', encoding='utf-8') as f:
+              yaml.safe_dump(cfg, f, allow_unicode=True)
+          EOF
+      - name: 哨兵一轮
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        run: python3 services/sentinel.py --config config.runtime.yaml
+      - name: 回写账本与源状态
+        if: always()
+        run: |
+          git config user.name "investment-research-bot"
+          git config user.email "investment-research-bot@local"
+          git add -f data/ledger.db data/sentinel_sources.json 2>/dev/null || true
+          git diff --cached --quiet && echo "状态无变化，不提交" && exit 0
+          git commit -m "chore: sentinel state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase
+          git push
