@@ -1,14 +1,19 @@
 # 监控轮询：每 15 分钟跑一轮 services/monitor.py（单次循环）。
 #
-# 设计要点（2026-10-29 部署准备）：
+# 设计要点（2026-10-29 部署准备，2026-11-09 修订）：
 # - secrets 不进仓库：运行期用仓库 secrets 注入 config.runtime.yaml，
 #   回写步骤只 git add data/，绝不含运行期配置。
+# - LLM 凭据走环境变量 DASHSCOPE_API_KEY（仓库 secrets 已有，2026-10-30 建）：
+#   agents/llm.py 优先读环境变量直连，读不到才走本机连接器。
 # - 状态回写：账本是门控（每日上限/冷却/去重）的唯一依据，跑者是临时的，
 #   故每轮把 data/heartbeat.json 与 data/ledger.db 强制加回 main
 #   （data/ 在 .gitignore 里，须用 git add -f）。
 # - 串行：concurrency + cancel-in-progress: false，避免两轮同时回写冲突。
-# - 辩论/深研/哨兵不在本 workflow：辩论未接触发器、LLM 层目前只走本机
-#   连接器、哨兵无 CLI 入口且 AkShare 在 Actions 网络下的可达性未验证。
+# - 辩论已接入本 workflow（2026-11-09）：过门控的触发自动开辩论，结论写账本
+#   后分级推送（与阈值告警同一套通道）；预算/去重拦截只记心跳，不报错。
+# - 深研是按需的：workflow_dispatch 传 deepdive_symbol 即跑一次深研
+#   （报告打在运行日志里，结论写账本），不跑行情轮询。
+# - 哨兵不在本 workflow：独立 workflow sentinel.yml（每天两轮）。
 # - 测试推送（2026-11-05 Bark 接线）：workflow_dispatch 的 test_push 输入
 #   为 true 时，只跑 tools/test_push.py 发一条紧急档测试消息（飞书 + Bark），
 #   不跑行情轮询、不写账本；定时触发永远跑轮询。
@@ -23,6 +28,14 @@ on:
         description: '发送测试推送（飞书 + Bark，紧急档）'
         type: boolean
         default: false
+      deepdive_symbol:
+        description: '按需深研标的（例如 300750.SZ，留空不跑深研）'
+        type: string
+        default: ''
+      deepdive_brief:
+        description: '深研背景/问题（留空按常规框架全面分析）'
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -37,11 +50,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: 检出
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: 装 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: 装依赖（监控核心只需 PyYAML）
@@ -74,11 +87,18 @@ jobs:
               yaml.safe_dump(cfg, f, allow_unicode=True)
           EOF
       - name: 轮询一轮
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.test_push != true }}
+        if: ${{ github.event_name != 'workflow_dispatch' || (inputs.test_push != true && inputs.deepdive_symbol == '') }}
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         run: python3 services/monitor.py --config config.runtime.yaml
       - name: 测试推送（飞书 + Bark）
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_push == true }}
         run: python3 tools/test_push.py --config config.runtime.yaml
+      - name: 按需深研
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.deepdive_symbol != '' }}
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        run: python3 tools/run_deepdive.py --symbol "${{ inputs.deepdive_symbol }}" --brief "${{ inputs.deepdive_brief }}" --config config.runtime.yaml
       - name: 回写心跳与账本
         if: always()
         run: |
