@@ -131,8 +131,71 @@ def fetch(symbol):
     raise QuoteError(f"全部行情源失败：{symbol} :: {' | '.join(errors)}")
 
 
+def _fetch_a_share(symbol, tolerance_pp=0.5):
+    """A 股双源拉取：Yahoo 为主、腾讯为备，返回
+    (quote, disagreement, backup_missing)。
+
+    Yahoo 失败即返回 (None, False, False)——与 monitor 旧行为一致：
+    腾讯只作校验源，不作主源兜底。
+    """
+    try:
+        yahoo = fetch_yahoo(symbol)
+    except QuoteError:
+        return None, False, False
+    try:
+        tencent = fetch_tencent(symbol)
+    except QuoteError:
+        return yahoo, False, True
+    if abs(yahoo["pct"] - tencent["pct"]) > tolerance_pp:
+        return yahoo, True, False
+    return yahoo, False, False
+
+
+def fetch_validated(symbol, proxies=None, tolerance_pp=0.5):
+    """带代理的双源校验拉取，返回 (quote, disagreement, backup_missing)。
+
+    原标的优先；原标的取不到且配了代理（config.yaml 的 proxy_symbol）
+    时改拉代理标的，返回的 symbol 仍记原标的，并多一个 "proxy" 字段。
+    代理是 A 股时同样走 Yahoo+腾讯双源校验——代理的涨跌幅也要经过
+    交叉核对，不能只信一源。
+
+    背景（2026-11-09 实测）：CN=F 已被 Yahoo 下架（Not Found），
+    USDCNH=X 在 Yahoo 上只返回 1 根日K、推导不出前收；两者分别由
+    510300.SS 与 CNY=X 代理，代理 1 年实测 p95/p99 与原阈值基本一致，
+    故阈值不用改。
+    """
+    if symbol.endswith((".SS", ".SZ")):
+        return _fetch_a_share(symbol, tolerance_pp)
+    try:
+        return fetch(symbol), False, False
+    except QuoteError:
+        pass
+    proxy = (proxies or {}).get(symbol)
+    if not proxy:
+        return None, False, False
+    if proxy.endswith((".SS", ".SZ")):
+        quote, disagreement, backup_missing = _fetch_a_share(
+            proxy, tolerance_pp)
+        if quote is not None:
+            quote = dict(quote)
+            quote["symbol"] = symbol
+            quote["proxy"] = proxy
+        return quote, disagreement, backup_missing
+    try:
+        quote = fetch(proxy)
+    except QuoteError:
+        return None, False, False
+    quote = dict(quote)
+    quote["symbol"] = symbol
+    quote["proxy"] = proxy
+    return quote, False, False
+
+
 def cross_validate(symbol, tolerance_pp=0.5):
-    """双源交叉校验：返回 (yahoo, tencent)；差值超阈值 raise DisagreementError。"""
+    """双源交叉校验：返回 (yahoo, tencent)；差值超阈值 raise DisagreementError。
+
+    只校验字面标的本身；需要代理的标的请用 fetch_validated。
+    """
     yahoo = fetch_yahoo(symbol)
     try:
         tencent = fetch_tencent(symbol)
