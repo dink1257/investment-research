@@ -36,14 +36,18 @@ def main():
     # 2026-10-27：industry_keywords 是用户已定稿的内容（见 config.yaml），
     # 重新生成时必须保留，绝不能重置为空，否则会静默丢掉用户确认的关键词表。
     out = os.path.join(REPO, "config.yaml")
-    kept_keywords = []
+    kept_push = None
     if os.path.exists(out):
         try:
             existing = yaml.safe_load(open(out, encoding="utf-8")) or {}
             kept_keywords = (existing.get("sentinel") or {}).get(
                 "industry_keywords") or []
+            # 2026-11-09：push 段是手工维护的（Bark 占位符 + 分级注释），
+            # 重新生成时必须原样保留，否则会静默丢掉 bark_server/bark_key。
+            kept_push = existing.get("push")
         except Exception:
             kept_keywords = []
+            kept_push = None
     symbols = {}
     for d in data:
         if "error" in d:
@@ -60,22 +64,30 @@ def main():
                  "regular": round(d["p95"], 2),
                  "emergency": round(d["p99"], 2),
                  "sigma": d["sigma"]}
-        if "proxy" in d:
-            entry["proxy"] = d["proxy"]
+        if "proxy_symbol" in d:
+            entry["proxy_symbol"] = d["proxy_symbol"]
+        if "proxy_note" in d:
+            entry["proxy_note"] = d["proxy_note"]
         symbols[d["symbol"]] = entry
-    # CN=F（A50 期指）Yahoo 无数据：暂用沪深 300ETF 参考，实施时走 AkShare/腾讯源补算
+    # CN=F（A50 期指）Yahoo 已下架（2026-11-09 实测 Not Found）：行情取
+    # 510300.SS 日K代理；510300 近 1 年实测 p95 2.35%/p99 3.10%，与阈值
+    # 2.37/3.07 基本一致，阈值不用改。
     symbols["CN=F"] = {"name": "A50期指", "unit": "pct",
                        "regular": 2.37, "emergency": 3.07,
-                       "proxy": "沪深300ETF（实施时走 AkShare/腾讯源补算）"}
+                       "proxy_symbol": "510300.SS",
+                       "proxy_note": "Yahoo 已下架 CN=F（2026-11-09 实测 "
+                                     "Not Found），改取 510300.SS 日K；"
+                                     "510300 近 1 年实测 p95 2.35%/p99 "
+                                     "3.10%，与阈值 2.37/3.07 基本一致"}
     config = {
         "model": {"provider": "dashscope", "name": "qwen3.8-flash",
                   "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
         "budget": {"currency": "CNY", "monthly_cap": 20, "warn_at": 16,
                    "daily_debate_cap": 8, "daily_deepdive_cap": 2,
                    "dedup_hours": 2},
-        "push": {"primary": "feishu", "backup": "telegram",
-                 "feishu_webhook": "", "telegram_bot_token": "",
-                 "telegram_chat_id": ""},
+        "push": kept_push or {"primary": "feishu", "backup": "telegram",
+                             "feishu_webhook": "", "telegram_bot_token": "",
+                             "telegram_chat_id": ""},
         "monitor": {"sources_priority": ["yahoo", "tencent"],
                     "heartbeat_file": "data/heartbeat.json",
                     "poll_interval_minutes": 15},
