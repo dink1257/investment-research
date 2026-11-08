@@ -891,7 +891,6 @@
     "name": "离岸人民币",
     "symbol": "USDCNH=X",
     "type": "forex",
-    "proxy": "CNY=X（在岸代理，实施时走 AkShare/腾讯源补算）",
     "n": 252,
     "sigma": 0.153,
     "p95": 0.33,
@@ -900,6 +899,8 @@
     "sigma_258": 0.394,
     "p95_over_196sigma": 1.104,
     "p99_over_258sigma": 1.381,
-    "share_over_3pct": 0.0
+    "share_over_3pct": 0.0,
+    "proxy_symbol": "CNY=X",
+    "proxy_note": "Yahoo 的 USDCNH=X 只返回 1 根日K、无法推导前收（2026-11-09 实测），改取 CNY=X 日K；CNY=X 近 1 年实测 p95 0.33%/p99 0.45%，与阈值 0.33/0.54 基本一致"
   }
 ]
