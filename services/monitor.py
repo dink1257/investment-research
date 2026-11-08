@@ -20,12 +20,32 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml  # noqa: E402
+from agents import debate as debate_mod  # noqa: E402
 from core import gates, quotes, thresholds  # noqa: E402
 from ledger import ledger as ledger_mod  # noqa: E402
 from push import push as push_mod  # noqa: E402
 
 BEIJING = ZoneInfo("Asia/Shanghai")
 TOLERANCE_PP = 0.5
+
+
+def _format_verdict(name, symbol, level, move_txt, verdict):
+    """辩论结论写成一条 plain-spoken 推送正文。低信心已在 run_debate 内
+    降级为观望，这里如实标出，不藏着。"""
+    lines = [
+        f"辩论结论：{verdict.get('verdict')}（信心 "
+        f"{verdict.get('confidence')}/5）",
+        f"方向：{verdict.get('position')}；目标区间："
+        f"{verdict.get('target_range')}；止损：{verdict.get('stop_loss')}",
+        f"异动：{move_txt}（{level}）",
+    ]
+    if verdict.get("downgraded"):
+        lines.append("已降级为观望（信心≤2，不给方向建议）")
+    uncertain = verdict.get("uncertain") or []
+    if uncertain:
+        lines.append("不确定项：" +
+                     "；".join(str(u) for u in uncertain[:3]))
+    return "\n".join(lines)
 
 
 def fetch_symbol(symbol, proxies=None):
@@ -52,7 +72,10 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
                if cfg.get("proxy_symbol")}
     summary = {"ts": ts, "checked": 0, "snapshots": 0, "triggers": 0,
                "alerts_sent": 0, "dry_run_alerts": 0, "blocked": {},
-               "disagreements": [], "errors": []}
+               "disagreements": [], "errors": [],
+               "debates_run": 0, "debates_blocked": {},
+               "debates_errored": 0, "verdicts_pushed": 0,
+               "verdicts_dry_run": 0}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         fetched = list(pool.map(
             partial(fetch_symbol, proxies=proxies), symbols))
@@ -115,6 +138,39 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
             summary["alerts_sent"] += 1
         else:
             summary["errors"].append(f"{symbol}: 推送全部失败（{level}）")
+        # 辩论（方案 §3.1 第 5-7 步）：过门控的触发才开辩论；结论写账本
+        # （run_debate 内已记）后再分级推送。预算/去重拦截不记 error。
+        debate_res = debate_mod.run_debate(
+            conn, config, symbol, name, move_txt, level, move,
+            is_bp=(cfg.get("unit") == "bp"), now=now)
+        if debate_res.get("blocked"):
+            reason = debate_res["blocked"]
+            summary["debates_blocked"][reason] = \
+                summary["debates_blocked"].get(reason, 0) + 1
+        elif debate_res.get("error"):
+            summary["debates_errored"] += 1
+            summary["errors"].append(
+                f"{symbol}: 辩论失败（{debate_res.get('detail', '')}）")
+        else:
+            summary["debates_run"] += 1
+            verdict = debate_res["verdict"]
+            v_title = f"辩论研判：{name}（{symbol}）{level}"
+            v_content = _format_verdict(name, symbol, level, move_txt,
+                                        verdict)
+            v_result = push_mod.send_alert(config, v_title, v_content,
+                                           level=level, dry_run=dry_run)
+            v_dry = bool(v_result.get("dry_run"))
+            v_delivered = bool(v_result.get("delivered"))
+            ledger_mod.record_alert(conn, ts, symbol, level, pct_for_row,
+                                    v_title, pushed=1 if v_delivered else 0,
+                                    dry_run=1 if v_dry else 0)
+            if v_dry:
+                summary["verdicts_dry_run"] += 1
+            elif v_delivered:
+                summary["verdicts_pushed"] += 1
+            else:
+                summary["errors"].append(
+                    f"{symbol}: 辩论结论推送失败（{level}）")
     summary["duration_s"] = round(time.time() - started, 1)
     status = "ok" if not summary["errors"] else "partial"
     detail = json.dumps(summary, ensure_ascii=False)
