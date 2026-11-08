@@ -31,6 +31,9 @@ def main():
     tmp = tempfile.mkdtemp()
     hb = os.path.join(tmp, "heartbeat.json")
 
+    # 辩论驱动默认桩：拦截，不调真实 LLM（各用例按需改桩）。
+    mon.debate_mod.run_debate = lambda *a, **k: {"blocked": "test_no_llm"}
+
     # ---- 常规触发 -> dry-run 预警 + 快照 + 心跳 ----
     mon.fetch_symbol = lambda s, proxies=None: (
         {"symbol": s, "price": 105.0, "prev_close": 100.0, "pct": 5.0,
@@ -92,6 +95,52 @@ def main():
     summary5 = mon.run_cycle(make_config(hb), conn4, ["BTC-USD"], dry_run=True)
     assert summary5["errors"] == ["BTC-USD: 行情全失败"], summary5
     assert summary5["snapshots"] == 0, summary5
+
+    # ---- 辩论驱动：结论推送（dry-run）----
+    verdict = {"verdict": "短期超跌，可分批关注", "target_range": "300-330",
+               "position": "轻仓试探", "stop_loss": "跌破 290 离场",
+               "confidence": 4, "uncertain": ["财报后指引未明"]}
+    mon.fetch_symbol = lambda s, proxies=None: (
+        {"symbol": s, "price": 105.0, "prev_close": 100.0, "pct": 5.0,
+         "source": "yahoo"}, False, False)
+    mon.debate_mod.run_debate = lambda *a, **k: {
+        "verdict": verdict, "cost_rmb": 0.07, "blocked": None}
+    conn5 = ledger_mod.init_db(":memory:")
+    summary6 = mon.run_cycle(make_config(hb), conn5, ["BTC-USD"],
+                             dry_run=True)
+    assert summary6["debates_run"] == 1, summary6
+    assert summary6["verdicts_dry_run"] == 1, summary6
+    assert summary6["debates_blocked"] == {}, summary6
+    rows5 = conn5.execute(
+        "SELECT title, dry_run FROM alerts ORDER BY rowid").fetchall()
+    assert len(rows5) == 2, rows5  # 阈值告警 + 辩论结论
+    assert rows5[1][0].startswith("辩论研判：比特币"), rows5[1]
+    assert rows5[1][1] == 1, rows5[1]
+    text = mon._format_verdict("比特币", "BTC-USD", "regular",
+                               "+5.00%（常规 ±4.5% / 紧急 ±6.6%）", verdict)
+    assert "信心 4/5" in text and "不确定项" in text, text
+
+    # ---- 辩论驱动：预算拦截 -> 只计 blocked，不推结论 ----
+    mon.debate_mod.run_debate = lambda *a, **k: {
+        "blocked": "daily_debate_cap"}
+    conn6 = ledger_mod.init_db(":memory:")
+    summary7 = mon.run_cycle(make_config(hb), conn6, ["BTC-USD"],
+                             dry_run=True)
+    assert summary7["debates_run"] == 0, summary7
+    assert summary7["debates_blocked"] == {"daily_debate_cap": 1}, summary7
+    assert summary7["verdicts_dry_run"] == 0, summary7
+    assert conn6.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
+
+    # ---- 辩论驱动：解析失败 -> 计 error，心跳变 partial ----
+    mon.debate_mod.run_debate = lambda *a, **k: {
+        "error": "parse_failed", "detail": "bad json", "cost_rmb": 0.07}
+    conn7 = ledger_mod.init_db(":memory:")
+    summary8 = mon.run_cycle(make_config(hb), conn7, ["BTC-USD"],
+                             dry_run=True)
+    assert summary8["debates_errored"] == 1, summary8
+    assert any("辩论失败" in e for e in summary8["errors"]), summary8
+    with open(hb, encoding="utf-8") as f:
+        assert json.load(f)["status"] == "partial"
 
     # ---- 退出码方案 C（只在全部失败时返回非零）----
     def _s(**kw):
