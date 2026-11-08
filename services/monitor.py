@@ -137,6 +137,23 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
     return summary
 
 
+def is_total_failure(summary):
+    """退出码方案 C（用户 2026-11-08 定）：只在“全部失败”时返回非零。
+
+    全部失败 = 一条行情快照都没写出来（全部行情源失败），
+    或有预警放行但一条都没送达（推送全部失败）。
+    部分失败仍返回 0，业务细节见心跳（status=partial + detail）。
+    dry-run 下放行的预警计 dry_run_alerts，不算推送失败。
+    """
+    if summary["checked"] > 0 and summary["snapshots"] == 0:
+        return True
+    passed_gates = summary["triggers"] - sum(summary["blocked"].values())
+    if (passed_gates > 0 and summary["alerts_sent"] == 0
+            and summary["dry_run_alerts"] == 0):
+        return True
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="监控轮询（单次循环）")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -158,6 +175,8 @@ def main():
     summary = run_cycle(config, conn, symbols, dry_run=args.dry_run,
                         workers=args.workers)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if is_total_failure(summary):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
