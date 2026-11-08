@@ -2,6 +2,15 @@ name = "investment-research-keepalive"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# 新 workflow 是 */15 全天候,看门狗每 10 分钟检查一次(UTC,Cloudflare cron 也是 UTC)
+# 新 workflow 是 7,22,37,52 全天候,看门狗每 10 分钟检查一次(UTC,Cloudflare cron 也是 UTC)
 [triggers]
 crons = ["*/10 * * * *"]
+
+# 健康接口的状态存储:KV 命名空间,绑定名 WATCHDOG_STATE,键 "health"。
+# 先在 Cloudflare Dashboard → Storage → KV 里建命名空间(名如
+# investment-research-watchdog-state),再把下面 id 换成它的 ID。
+# 网页粘贴部署时不用改这里,在 Worker → Settings → Variables →
+# KV Namespace Bindings 里绑同名变量即可。
+[[kv_namespaces]]
+binding = "WATCHDOG_STATE"
+id = "ae143c80419f4281a238ffb80f015dab"
