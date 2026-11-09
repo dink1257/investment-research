@@ -1,14 +1,13 @@
 {
-  "last_run_ts": "2026-11-10T01:31:03.594335+08:00",
+  "last_run_ts": "2026-11-10T02:01:05.970435+08:00",
   "status": "ok",
-  "ts": "2026-11-10T01:31:03.594335+08:00",
+  "ts": "2026-11-10T02:01:05.970435+08:00",
   "checked": 65,
   "snapshots": 65,
-  "triggers": 9,
-  "alerts_sent": 0,
+  "triggers": 8,
+  "alerts_sent": 3,
   "dry_run_alerts": 0,
   "blocked": {
-    "cooldown": 4,
     "dedup": 5
   },
   "disagreements": [
@@ -45,10 +44,12 @@
     "CN=F"
   ],
   "errors": [],
-  "debates_run": 0,
-  "debates_blocked": {},
+  "debates_run": 1,
+  "debates_blocked": {
+    "daily_debate_cap": 2
+  },
   "debates_errored": 0,
-  "verdicts_pushed": 0,
+  "verdicts_pushed": 1,
   "verdicts_dry_run": 0,
-  "duration_s": 3.4
+  "duration_s": 73.2
 }
