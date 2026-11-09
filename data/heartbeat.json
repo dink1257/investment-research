@@ -1,14 +1,14 @@
 {
-  "last_run_ts": "2026-11-10T00:31:03.132690+08:00",
+  "last_run_ts": "2026-11-10T01:01:05.595644+08:00",
   "status": "ok",
-  "ts": "2026-11-10T00:31:03.132690+08:00",
+  "ts": "2026-11-10T01:01:05.595644+08:00",
   "checked": 65,
   "snapshots": 65,
   "triggers": 8,
-  "alerts_sent": 2,
+  "alerts_sent": 4,
   "dry_run_alerts": 0,
   "blocked": {
-    "dedup": 6
+    "dedup": 4
   },
   "disagreements": [
     "000333.SZ",
@@ -44,10 +44,10 @@
     "CN=F"
   ],
   "errors": [],
-  "debates_run": 2,
+  "debates_run": 4,
   "debates_blocked": {},
   "debates_errored": 0,
-  "verdicts_pushed": 2,
+  "verdicts_pushed": 4,
   "verdicts_dry_run": 0,
-  "duration_s": 74.2
+  "duration_s": 192.9
 }
