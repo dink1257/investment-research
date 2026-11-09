@@ -1,20 +1,18 @@
 {
-  "last_run_ts": "2026-11-09T14:41:03.212241+08:00",
+  "last_run_ts": "2026-11-09T15:11:03.444637+08:00",
   "status": "ok",
-  "ts": "2026-11-09T14:41:03.212241+08:00",
+  "ts": "2026-11-09T15:11:03.444637+08:00",
   "checked": 65,
   "snapshots": 65,
-  "triggers": 3,
+  "triggers": 2,
   "alerts_sent": 0,
   "dry_run_alerts": 0,
   "blocked": {
-    "daily_limit": 2,
+    "daily_limit": 1,
     "trading_session": 1
   },
   "disagreements": [
-    "300760.SZ",
-    "301606.SZ",
-    "688008.SS"
+    "300760.SZ"
   ],
   "errors": [],
   "debates_run": 0,
@@ -22,5 +20,5 @@
   "debates_errored": 0,
   "verdicts_pushed": 0,
   "verdicts_dry_run": 0,
-  "duration_s": 2.0
+  "duration_s": 3.2
 }
