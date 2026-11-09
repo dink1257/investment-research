@@ -1,14 +1,15 @@
 {
-  "last_run_ts": "2026-11-09T22:31:05.474671+08:00",
+  "last_run_ts": "2026-11-09T23:01:05.148750+08:00",
   "status": "ok",
-  "ts": "2026-11-09T22:31:05.474671+08:00",
+  "ts": "2026-11-09T23:01:05.148750+08:00",
   "checked": 65,
   "snapshots": 65,
-  "triggers": 4,
-  "alerts_sent": 2,
+  "triggers": 7,
+  "alerts_sent": 3,
   "dry_run_alerts": 0,
   "blocked": {
     "trading_session": 1,
+    "cooldown": 2,
     "daily_limit": 1
   },
   "disagreements": [
@@ -16,9 +17,11 @@
   ],
   "errors": [],
   "debates_run": 2,
-  "debates_blocked": {},
+  "debates_blocked": {
+    "daily_debate_cap": 1
+  },
   "debates_errored": 0,
   "verdicts_pushed": 2,
   "verdicts_dry_run": 0,
-  "duration_s": 67.6
+  "duration_s": 112.2
 }
