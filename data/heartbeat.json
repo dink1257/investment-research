@@ -1,14 +1,14 @@
 {
-  "last_run_ts": "2026-11-10T23:11:04.646562+08:00",
+  "last_run_ts": "2026-11-10T23:41:07.563134+08:00",
   "status": "ok",
-  "ts": "2026-11-10T23:11:04.646562+08:00",
+  "ts": "2026-11-10T23:41:07.563134+08:00",
   "checked": 65,
   "snapshots": 65,
-  "triggers": 2,
+  "triggers": 1,
   "alerts_sent": 0,
   "dry_run_alerts": 0,
   "blocked": {
-    "dedup": 2
+    "dedup": 1
   },
   "disagreements": [],
   "errors": [],
