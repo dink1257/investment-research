@@ -1,46 +1,22 @@
 {
-  "last_run_ts": "2026-11-11T05:21:08.501825+08:00",
+  "last_run_ts": "2026-11-11T05:51:03.991947+08:00",
   "status": "ok",
-  "ts": "2026-11-11T05:21:08.501825+08:00",
+  "ts": "2026-11-11T05:51:03.991947+08:00",
   "checked": 65,
   "snapshots": 65,
-  "triggers": 4,
+  "triggers": 3,
   "alerts_sent": 0,
   "dry_run_alerts": 0,
   "blocked": {
-    "trading_session": 2,
-    "daily_limit": 2
+    "daily_limit": 2,
+    "trading_session": 1
   },
-  "disagreements": [
-    "000333.SZ",
-    "000960.SZ",
-    "002050.SZ",
-    "002371.SZ",
-    "002415.SZ",
-    "300124.SZ",
-    "300308.SZ",
-    "300750.SZ",
-    "301269.SZ",
-    "301606.SZ",
-    "600276.SS",
-    "601888.SS",
-    "603259.SS",
-    "603288.SS",
-    "603882.SS",
-    "688008.SS",
-    "688012.SS",
-    "688041.SS",
-    "688065.SS",
-    "688072.SS",
-    "688235.SS",
-    "688775.SS",
-    "688981.SS"
-  ],
+  "disagreements": [],
   "errors": [],
   "debates_run": 0,
   "debates_blocked": {},
   "debates_errored": 0,
   "verdicts_pushed": 0,
   "verdicts_dry_run": 0,
-  "duration_s": 2.1
+  "duration_s": 3.1
 }
