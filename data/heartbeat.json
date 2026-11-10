@@ -1,15 +1,13 @@
 {
-  "last_run_ts": "2026-11-10T22:11:03.860050+08:00",
+  "last_run_ts": "2026-11-10T22:41:04.611352+08:00",
   "status": "ok",
-  "ts": "2026-11-10T22:11:03.860050+08:00",
+  "ts": "2026-11-10T22:41:04.611352+08:00",
   "checked": 65,
   "snapshots": 65,
-  "triggers": 5,
+  "triggers": 1,
   "alerts_sent": 1,
   "dry_run_alerts": 0,
-  "blocked": {
-    "trading_session": 4
-  },
+  "blocked": {},
   "disagreements": [],
   "errors": [],
   "debates_run": 0,
@@ -19,5 +17,5 @@
   "debates_errored": 0,
   "verdicts_pushed": 0,
   "verdicts_dry_run": 0,
-  "duration_s": 4.5
+  "duration_s": 4.4
 }
