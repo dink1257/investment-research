@@ -1,0 +1,47 @@
+# 隐私检查：防公开运行日志泄漏（E' 补洞 1 的 CI 检查）。
+#
+# 查两件事，任一命中即失败：
+# 1. workflow 文件里出现 shell 调试开关 -x（会把命令展开打进公开日志）；
+# 2. monitor.yml 里调用 run_deepdive.py / run_debate.py 的行没带 --quiet
+#    （报告会打印进公开日志；报告只应写 state 文件）。
+# 注意：匹配时用字符类写法，避免本文件自身的 grep 行自匹配。
+name: 隐私检查
+
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+      - 'tools/run_deepdive.py'
+      - 'tools/run_debate.py'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'tools/run_deepdive.py'
+      - 'tools/run_debate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 1
+      - name: 检查调试开关与 --quiet
+        run: |
+          set -e
+          if grep -rn 'set -[x]' .github/workflows/; then
+            echo '::error::workflow 里发现 shell 调试开关，会把命令展开打进公开日志'
+            exit 1
+          fi
+          missing=$(grep -E 'python3 tools/run_(deepdive|debate)\.py' .github/workflows/monitor.yml | grep -v -- '--quiet' || true)
+          if [ -n "$missing" ]; then
+            echo '::error::monitor.yml 里调用深研/辩论 CLI 的行缺 --quiet，报告会打印进公开日志'
+            echo "$missing"
+            exit 1
+          fi
+          echo '隐私检查通过'
