@@ -1,22 +1,48 @@
 # 监控轮询：每 15 分钟跑一轮 services/monitor.py（单次循环）。
 #
-# 设计要点（2026-10-29 部署准备，2026-11-09 修订）：
+# 设计要点（2026-10-29 部署准备，2026-11-11 E' 重做）：
 # - secrets 不进仓库：运行期用仓库 secrets 注入 config.runtime.yaml，
-#   回写步骤只 git add data/，绝不含运行期配置。
+#   回写步骤只动数据仓，绝不含运行期配置。
 # - LLM 凭据走环境变量 DASHSCOPE_API_KEY（仓库 secrets 已有，2026-10-30 建）：
 #   agents/llm.py 优先读环境变量直连，读不到才走本机连接器。
-# - 状态回写：账本是门控（每日上限/冷却/去重）的唯一依据，跑者是临时的，
-#   故每轮把 data/heartbeat.json 与 data/ledger.db 强制加回 main
+# - 双仓（E'，2026-11-11）：代码在公开仓，数据（账本、心跳、结果文件）
+#   全在私有数据仓 dink1257/investment-research-data（检出到 data-store）。
+#   本 workflow 运行时不向公开仓提交任何东西；回写只推数据仓。
+#   数据仓不存在时检出步骤会失败——先建仓（带 README，main 分支存在）
+#   再推本文件，否则定时轮询也会跟着失败。
+# - 账本是门控（每日上限/冷却/去重）的唯一依据，跑者是临时的，
+#   故每轮把数据仓里的 data/heartbeat.json 与 data/ledger.db 加回 main
 #   （data/ 在 .gitignore 里，须用 git add -f）。
+#   方案四结果文件 state/last_analysis.json + state/last_analysis.md
+#   也一并回写（供 Hermes 轮询数据仓）。
+#   契约（Hermes 2026-11-10 反馈）：结果文件带 task_id + status
+#  （running/success/blocked/failed），阻塞/失败也写，不让轮询等满 6 分钟；
+#   轮询必须带 token（Hermes 侧，未认证 60 次/小时不够 30 秒一轮）。
+#   结果文件另带 run_id / attempt（重跑同一 task_id 时靠它区分）。
 # - 串行：concurrency + cancel-in-progress: false，避免两轮同时回写冲突。
 # - 辩论已接入本 workflow（2026-11-09）：过门控的触发自动开辩论，结论写账本
 #   后分级推送（与阈值告警同一套通道）；预算/去重拦截只记心跳，不报错。
-# - 深研是按需的：workflow_dispatch 传 deepdive_symbol 即跑一次深研
-#   （报告打在运行日志里，结论写账本），不跑行情轮询。
+# - 深研是按需的：workflow_dispatch 传 deepdive_payload_enc 即跑一次深研
+#   （结论写账本与数据仓的结果文件），不跑行情轮询。
+# - 主题辩论也是按需的：workflow_dispatch 传 debate_payload_enc 即跑一次
+#   主题辩论（tools/run_debate.py），结论写账本。
+# - 方案四派发契约（A 版，2026-11-11，E' 的修订）：每次派发带 task_id、
+#   mode（deepdive/debate）、payload_enc（Fernet 密文 JSON：深研
+#   {"symbol": ..., "brief": ...}，辩论 {"topic": ...}；CLI 用
+#   HERMES_INPUT_KEY 解密，明文不进日志）、budget_cny、deadline_utc；
+#   GitHub 腿把结论（含 key_points/falsify/cost_cny/status/run_id/attempt）
+#   写回数据仓的 state/last_analysis.json，阻塞/失败也写；Hermes 每 30 秒
+#   带 token 轮询数据仓，靠 task_id 认本轮、靠 status 提前停，6 分钟封顶、
+#   不重试。深研/辩论步骤都传 --quiet：报告只写 state 文件，不打印到
+#   运行日志（运行日志是公开的）。
 # - 哨兵不在本 workflow：独立 workflow sentinel.yml（每天两轮）。
 # - 测试推送（2026-11-05 Bark 接线）：workflow_dispatch 的 test_push 输入
 #   为 true 时，只跑 tools/test_push.py 发一条紧急档测试消息（飞书 + Bark），
 #   不跑行情轮询、不写账本；定时触发永远跑轮询。
+# - 硬化（2026-11-11）：actions 固定到完整 SHA（下面标 v7 的那两个）；
+#   permissions 只留 contents: read（回写走 DATA_REPO_TOKEN，不用
+#   GITHUB_TOKEN 写公开仓）；触发器只有 schedule + workflow_dispatch，
+#   没有 pull_request_target。
 name: 监控轮询
 
 on:
@@ -28,17 +54,33 @@ on:
         description: '发送测试推送（飞书 + Bark，紧急档）'
         type: boolean
         default: false
-      deepdive_symbol:
-        description: '按需深研标的（例如 300750.SZ，留空不跑深研）'
+      deepdive_payload_enc:
+        description: '按需深研 payload（Fernet 密文 JSON {"symbol": ..., "brief": ...}，Hermes 加密后传；留空不跑深研）'
         type: string
         default: ''
-      deepdive_brief:
-        description: '深研背景/问题（留空按常规框架全面分析）'
+      task_id:
+        description: '方案四派发编号（Hermes 生成，轮询靠它认本轮；手动跑可留空）'
+        type: string
+        default: ''
+      mode:
+        description: '方案四派发模式：deepdive（标的深研）或 debate（主题辩论）'
+        type: string
+        default: 'deepdive'
+      debate_payload_enc:
+        description: '按需主题辩论 payload（Fernet 密文 JSON {"topic": ...}，Hermes 加密后传；留空不跑辩论）'
+        type: string
+        default: ''
+      budget_cny:
+        description: 'Hermes 声明的本轮预算（元，仅记录，不作限额依据）'
+        type: string
+        default: ''
+      deadline_utc:
+        description: 'Hermes 声明的截止时间（ISO 8601 UTC；过了则不跑，只写 blocked）'
         type: string
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: monitor-cycle
@@ -50,15 +92,25 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: 检出
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
+      - name: 检出数据仓（私有）
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          repository: dink1257/investment-research-data
+          path: data-store
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          fetch-depth: 0
       - name: 装 Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7
         with:
           python-version: '3.12'
       - name: 装依赖（监控核心只需 PyYAML）
         run: pip install pyyaml
+      - name: 装解密依赖（深研/辩论派发）
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.deepdive_payload_enc != '' || inputs.debate_payload_enc != '') }}
+        run: pip install cryptography
       - name: 注入 secrets 到运行期配置（不进 git）
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
@@ -83,28 +135,38 @@ jobs:
               push['bark_server'] = os.environ['BARK_SERVER']
           if os.environ.get('BARK_KEY'):
               push['bark_key'] = os.environ['BARK_KEY']
+          mon = cfg.setdefault('monitor', {})
+          mon['heartbeat_file'] = 'data-store/data/heartbeat.json'
           with open('config.runtime.yaml', 'w', encoding='utf-8') as f:
               yaml.safe_dump(cfg, f, allow_unicode=True)
           EOF
       - name: 轮询一轮
-        if: ${{ github.event_name != 'workflow_dispatch' || (inputs.test_push != true && inputs.deepdive_symbol == '') }}
+        if: ${{ github.event_name != 'workflow_dispatch' || (inputs.test_push != true && inputs.deepdive_payload_enc == '' && inputs.debate_payload_enc == '') }}
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
-        run: python3 services/monitor.py --config config.runtime.yaml
+        run: python3 services/monitor.py --config config.runtime.yaml --db data-store/data/ledger.db
       - name: 测试推送（飞书 + Bark）
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_push == true }}
         run: python3 tools/test_push.py --config config.runtime.yaml
       - name: 按需深研
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.deepdive_symbol != '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.deepdive_payload_enc != '' }}
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
-        run: python3 tools/run_deepdive.py --symbol "${{ inputs.deepdive_symbol }}" --brief "${{ inputs.deepdive_brief }}" --config config.runtime.yaml
-      - name: 回写心跳与账本
+          HERMES_INPUT_KEY: ${{ secrets.HERMES_INPUT_KEY }}
+        run: python3 tools/run_deepdive.py --payload-encrypted "${{ inputs.deepdive_payload_enc }}" --task-id "${{ inputs.task_id }}" --budget-cny "${{ inputs.budget_cny }}" --deadline-utc "${{ inputs.deadline_utc }}" --config config.runtime.yaml --db data-store/data/ledger.db --state-dir data-store/state --quiet --run-id ${{ github.run_id }} --attempt ${{ github.run_attempt }}
+      - name: 按需主题辩论
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debate_payload_enc != '' }}
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          HERMES_INPUT_KEY: ${{ secrets.HERMES_INPUT_KEY }}
+        run: python3 tools/run_debate.py --payload-encrypted "${{ inputs.debate_payload_enc }}" --task-id "${{ inputs.task_id }}" --budget-cny "${{ inputs.budget_cny }}" --deadline-utc "${{ inputs.deadline_utc }}" --config config.runtime.yaml --db data-store/data/ledger.db --state-dir data-store/state --quiet --run-id ${{ github.run_id }} --attempt ${{ github.run_attempt }}
+      - name: 回写心跳与账本（数据仓）
         if: always()
         run: |
+          cd data-store
           git config user.name "investment-research-bot"
           git config user.email "investment-research-bot@local"
-          git add -f data/heartbeat.json data/ledger.db 2>/dev/null || true
+          git add -f data/heartbeat.json data/ledger.db state/last_analysis.json state/last_analysis.md 2>/dev/null || true
           git diff --cached --quiet && echo "状态无变化，不提交" && exit 0
           git commit -m "chore: monitor heartbeat $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git pull --rebase
