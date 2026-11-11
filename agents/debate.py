@@ -59,20 +59,11 @@ def _validate(verdict):
     return verdict
 
 
-def run_debate(conn, config, symbol, name, move_text, level, move_value,
-               is_bp=False, now=None, llm_call=None):
-    """开一场辩论。返回 {"verdict": dict, "cost_rmb": float, "blocked": None}
-    或 {"blocked": reason}（预算/去重拦截，未调 LLM）或 {"error": ...}。"""
-    now = now or datetime.now(BEIJING)
-    allowed, reason = budget_mod.check_debate(conn, config, symbol, level,
-                                              move_value, is_bp, now)
-    if not allowed:
-        return {"blocked": reason}
-    cause = get_cause_brief(conn, symbol, now) or \
-        "暂无（哨兵账本近 7 天无重大项）"
-    brief = (f"标的：{name}（{symbol}）；异动：{move_text}；级别：{level}；\n"
-             f"诱因要点：\n{cause}")
-    prompt = load_prompt("debate.md").replace("{brief}", brief)
+def _call_and_record(conn, prompt, symbol, title, now, llm_call):
+    """调一次 LLM（解析失败重试一次）-> 信心降级 -> 写账本 + 成本。
+    返回 {"verdict": dict, "cost_rmb": float, "blocked": None}
+    或 {"error": "parse_failed", "detail": str, "cost_rmb": float}。
+    个股辩论与主题辩论共用，行为与旧 run_debate 完全一致。"""
     call = llm_call or llm_mod.call_qwen
     total_cost = 0.0
     verdict = None
@@ -89,7 +80,7 @@ def run_debate(conn, config, symbol, name, move_text, level, move_value,
     if verdict is None:
         err = {"error": "parse_failed", "detail": last_error}
         ledger_mod.record_judgment(conn, now.isoformat(), "debate", symbol,
-                                   f"辩论研判：{name}（{symbol}）",
+                                   title,
                                    json.dumps(err, ensure_ascii=False),
                                    total_cost)
         return {"error": "parse_failed", "detail": last_error,
@@ -98,7 +89,59 @@ def run_debate(conn, config, symbol, name, move_text, level, move_value,
         verdict["downgraded"] = True
         verdict["effective_stance"] = "观望"
     ledger_mod.record_judgment(conn, now.isoformat(), "debate", symbol,
-                               f"辩论研判：{name}（{symbol}）",
+                               title,
                                json.dumps(verdict, ensure_ascii=False),
                                total_cost)
     return {"verdict": verdict, "cost_rmb": total_cost, "blocked": None}
+
+
+def run_debate(conn, config, symbol, name, move_text, level, move_value,
+               is_bp=False, now=None, llm_call=None):
+    """开一场辩论。返回 {"verdict": dict, "cost_rmb": float, "blocked": None}
+    或 {"blocked": reason}（预算/去重拦截，未调 LLM）或 {"error": ...}。"""
+    now = now or datetime.now(BEIJING)
+    allowed, reason = budget_mod.check_debate(conn, config, symbol, level,
+                                              move_value, is_bp, now)
+    if not allowed:
+        return {"blocked": reason}
+    cause = get_cause_brief(conn, symbol, now) or \
+        "暂无（哨兵账本近 7 天无重大项）"
+    brief = (f"标的：{name}（{symbol}）；异动：{move_text}；级别：{level}；\n"
+             f"诱因要点：\n{cause}")
+    prompt = load_prompt("debate.md").replace("{brief}", brief)
+    return _call_and_record(conn, prompt, symbol,
+                            f"辩论研判：{name}（{symbol}）", now, llm_call)
+
+
+def get_industry_brief(conn, now):
+    """哨兵账本近 7 天的行业项（主题辩论的诱因；个股项不混入）。"""
+    since = (now - timedelta(days=7)).isoformat()
+    rows = ledger_mod.recent_sentinel(conn, "", since, limit=5)
+    lines = [f"【行业-{grade}】{title}（{ts[:10]}）"
+             for ts, title, grade in rows if grade in ("emergency",
+                                                       "important")]
+    return "\n".join(lines)
+
+
+def run_topic_debate(conn, config, topic, now=None, llm_call=None):
+    """就一个行业/政策主题开一场辩论（方案四 GitHub 腿）。
+    复用个股辩论的提示词、校验、信心降级与记账；区别：无标的/异动，
+    诱因只取哨兵账本的行业项；去重按主题文本（2 小时内同一主题只辩一次，
+    不同主题互不拦截）；与个股辩论共用每日 8 场配额与月度熔断。
+    返回同 run_debate，成功时多带 "topic"。"""
+    now = now or datetime.now(BEIJING)
+    symbol = "topic:" + topic[:60]
+    allowed, reason = budget_mod.check_debate(conn, config, symbol,
+                                              "regular", 0, False, now)
+    if not allowed:
+        return {"blocked": reason}
+    cause = get_industry_brief(conn, now) or \
+        "暂无（哨兵账本近 7 天无行业重大项）"
+    brief = (f"主题：{topic}（行业/政策问题，非单个标的异动）\n"
+             f"相关动态：\n{cause}")
+    prompt = load_prompt("debate.md").replace("{brief}", brief)
+    res = _call_and_record(conn, prompt, symbol,
+                           f"辩论研判（主题）：{topic}", now, llm_call)
+    if res.get("verdict") is not None:
+        res["topic"] = topic
+    return res
