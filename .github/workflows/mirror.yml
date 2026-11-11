@@ -1,0 +1,40 @@
+# 数据仓镜像：每晚把私有数据仓镜像到备份仓（只写、不读）。
+#
+# 目的（E' 补洞 3）：私有数据仓是账本与结果文件的唯一副本，一次误删或
+# 误 force-push 就会丢数据。本 workflow 每晚把数据仓 main 原样推到备份仓
+# dink1257/investment-research-data-backup 的 main，备份仓平时没人读、
+# 没人写，只当保险。两个私有仓都还没建时本 workflow 会失败——先建仓
+# （带 README，main 分支存在）再推本文件。
+# 只有 git 操作，不打印任何文件内容，不引入新泄漏。
+# DATA_REPO_TOKEN 须对两个私有仓都有 Contents 读写权限。
+name: 数据仓镜像
+
+on:
+  schedule:
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出数据仓
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          repository: dink1257/investment-research-data
+          path: data-store
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          fetch-depth: 0
+      - name: 镜像到备份仓
+        run: |
+          cd data-store
+          git remote add backup "https://x-access-token:${{ secrets.DATA_REPO_TOKEN }}@github.com/dink1257/investment-research-data-backup.git"
+          git push backup main:main --force
