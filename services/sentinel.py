@@ -311,7 +311,7 @@ def main():
     用法：python3 services/sentinel.py [--config ...] [--db ...]
               [--symbols 300750.SZ,600519.SS] [--dry-run]
     dry-run：只记账本、不真推、不调 LLM 做摘要（省成本）。
-    源状态文件 data/sentinel_sources.json 与账本一起回写（见 workflow）。
+    源状态文件 sentinel_sources.json 与账本同目录，一起回写（见 workflow）。
     """
     parser = argparse.ArgumentParser(description="新闻哨兵（单次循环）")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -336,7 +336,8 @@ def main():
     conn = ledger_mod.init_db(args.db)
     now = datetime.now(BEIJING)
     date_str = now.strftime("%Y%m%d")
-    status_path = os.path.join(root, "data", "sentinel_sources.json")
+    status_path = os.path.join(os.path.dirname(args.db),
+                               "sentinel_sources.json")
     res = run_sentinel(
         conn, config, now,
         push_fn=_dry_run_push if args.dry_run else None,
