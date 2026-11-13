@@ -35,9 +35,11 @@ def classify_market(symbol):
         return "HK"
     if symbol.endswith("-USD"):
         return "crypto"
-    if (symbol.endswith(("=F", "=X")) or symbol.startswith("^")
-            or symbol == "DX-Y.NYB"):
+    if symbol.endswith(("=F", "=X")) or symbol == "DX-Y.NYB":
         return "futures_fx"
+    # ^ 开头是指数/收益率（如 ^TNX 美债收益率、^GSPC 标普），跟美股时段，
+    # 不是期货/外汇（2026-11-13 修正：此前 ^ 被划进 futures_fx，
+    # 工作日任意时间都放行，盘外数据冻结时也会反复触发）。
     return "US"
 
 
