@@ -105,6 +105,15 @@ def get_recent_snapshots(conn, limit=10):
         " ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
 
+def get_last_snapshot(conn, symbol):
+    """某标的最近一条快照 (price, prev_close)，无记录返回 None。
+    供监控的“无新数据”守卫用：行情与上一轮完全相同时不重复触发。"""
+    row = conn.execute(
+        "SELECT price, prev_close FROM snapshots WHERE symbol = ?"
+        " ORDER BY id DESC LIMIT 1", (symbol,)).fetchone()
+    return row if row else None
+
+
 def record_alert(conn, ts, symbol, level, pct, title, pushed=0, dry_run=0):
     """记一条已放行并（真实或 dry-run）投递的预警，供门控去重/冷却/每日上限查询。
 
