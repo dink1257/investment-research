@@ -54,12 +54,28 @@ def main():
     snaps = ledger_mod.get_recent_snapshots(conn)
     assert len(snaps) == 1 and snaps[0][1] == "BTC-USD", snaps
 
-    # ---- 立即再跑一轮 -> 门控拦截（冷却），不重复预警 ----
+    # ---- 立即再跑一轮（同一冻结价）-> 无新数据守卫跳过，不触发 ----
+    # （2026-11-13 改：相同行情不再进门控，直接按 stale 跳过。）
     summary2 = mon.run_cycle(make_config(hb), conn, ["BTC-USD"], dry_run=True)
-    assert summary2["triggers"] == 1, summary2
+    assert summary2["triggers"] == 0, summary2
+    assert summary2["stale_skipped"] == 1, summary2
     assert summary2["dry_run_alerts"] == 0, summary2
-    assert summary2["blocked"] == {"cooldown": 1}, summary2
     assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
+    # ---- 价变了再跑一轮 -> 门控拦截（冷却），不重复预警 ----
+    mon.fetch_symbol = lambda s, proxies=None: (
+        {"symbol": s, "price": 106.0, "prev_close": 100.0, "pct": 6.0,
+         "source": "yahoo"}, False, False) if s == "BTC-USD" else (None, False,
+                                                               False)
+    summary2b = mon.run_cycle(make_config(hb), conn, ["BTC-USD"], dry_run=True)
+    assert summary2b["triggers"] == 1, summary2b
+    assert summary2b["dry_run_alerts"] == 0, summary2b
+    assert summary2b["blocked"] == {"cooldown": 1}, summary2b
+    assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
+    # 恢复原来那档 mock（105.0），供后面用例使用。
+    mon.fetch_symbol = lambda s, proxies=None: (
+        {"symbol": s, "price": 105.0, "prev_close": 100.0, "pct": 5.0,
+         "source": "yahoo"}, False, False) if s == "BTC-USD" else (None, False,
+                                                               False)
 
     # ---- 基点型标的（^TNX +15bp -> 常规档）----
     # ^TNX 是期货/外汇类，只在工作日放行；测试不依赖真实日期，强制放行
@@ -158,6 +174,31 @@ def main():
     assert mon.is_total_failure(_s(triggers=2, alerts_sent=1)) \
         is False  # 部分送达不算全部失败
     assert mon.is_total_failure(_s(checked=0, snapshots=0)) is False  # 空表
+
+    # ---- 无新数据守卫（2026-11-13 TNX 刷屏）：冻结行情只报一次 ----
+    # ^TNX 盘外数据冻结（现价/前收不变），即使变动仍越阈值，第二轮起
+    # 不再触发；价变后恢复正常门控（冷却拦住，不算 stale）。
+    mon.gates.in_trading_session = lambda *a, **k: True
+    try:
+        mon.fetch_symbol = lambda s, proxies=None: (
+            {"symbol": s, "price": 5.103000164031982,
+             "prev_close": 4.998000144958496, "pct": 2.1,
+             "source": "yahoo"}, False, False)
+        conn8 = ledger_mod.init_db(":memory:")
+        s_a = mon.run_cycle(make_config(hb), conn8, ["^TNX"], dry_run=True)
+        assert s_a["triggers"] == 1 and s_a["dry_run_alerts"] == 1, s_a
+        s_b = mon.run_cycle(make_config(hb), conn8, ["^TNX"], dry_run=True)
+        assert s_b["triggers"] == 0 and s_b["stale_skipped"] == 1, s_b
+        assert s_b["dry_run_alerts"] == 0, s_b
+        mon.fetch_symbol = lambda s, proxies=None: (
+            {"symbol": s, "price": 5.25,
+             "prev_close": 4.998000144958496, "pct": 5.0,
+             "source": "yahoo"}, False, False)
+        s_c = mon.run_cycle(make_config(hb), conn8, ["^TNX"], dry_run=True)
+        assert s_c["stale_skipped"] == 0, s_c
+        assert s_c["blocked"] == {"cooldown": 1}, s_c
+    finally:
+        mon.gates.in_trading_session = _orig_session
     print("test_monitor: all passed")
 
 
