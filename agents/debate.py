@@ -104,8 +104,20 @@ def run_debate(conn, config, symbol, name, move_text, level, move_value,
                                               move_value, is_bp, now)
     if not allowed:
         return {"blocked": reason}
-    cause = get_cause_brief(conn, symbol, now) or \
-        "暂无（哨兵账本近 7 天无重大项）"
+    cause_raw = get_cause_brief(conn, symbol, now)
+    cause = cause_raw or "暂无（哨兵账本近 7 天无重大项）"
+    # 实质性门（2026-11-13 用户反馈辩论浅、千篇一律）：常规档且无诱因
+    # 且变动仅略超阈值时，不开辩论——这种输入只能产出“证据不足、信心 2/5”
+    # 的套话。紧急档、有诱因、或变动 ≥1.5 倍常规阈值时照常辩论。
+    if level != "emergency" and not cause_raw:
+        sym_cfg = config.get("thresholds", {}).get("symbols", {}).get(
+            symbol, {})
+        if is_bp:
+            regular = sym_cfg.get("regular_bp")
+        else:
+            regular = sym_cfg.get("regular")
+        if regular and abs(move_value or 0) < 1.5 * regular:
+            return {"blocked": "no_cause_marginal"}
     brief = (f"标的：{name}（{symbol}）；异动：{move_text}；级别：{level}；\n"
              f"诱因要点：\n{cause}")
     prompt = load_prompt("debate.md").replace("{brief}", brief)
