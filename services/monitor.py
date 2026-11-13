@@ -75,7 +75,7 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
                "disagreements": [], "errors": [],
                "debates_run": 0, "debates_blocked": {},
                "debates_errored": 0, "verdicts_pushed": 0,
-               "verdicts_dry_run": 0}
+               "verdicts_dry_run": 0, "stale_skipped": 0}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         fetched = list(pool.map(
             partial(fetch_symbol, proxies=proxies), symbols))
@@ -101,11 +101,20 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
         if disagreement:
             level = "disagreement"
             summary["disagreements"].append(symbol)
+        # 无新数据守卫（2026-11-13 TNX 刷屏根因）：行情与上一轮快照
+        # 完全相同（现价、前收都不变）时，没有新信息——即使变动仍越阈值
+        # 也不触发。典型场景是美股盘外 ^TNX 等数据冻结，上一日 +11bp
+        # 会被每 30 分钟重复报一次。快照照常记，只跳过触发链。
+        last = ledger_mod.get_last_snapshot(conn, symbol)
         ledger_mod.record_snapshot(conn, ts, symbol, name, quote["price"],
                                    quote["prev_close"], pct_for_row, level,
                                    quote["source"])
         summary["snapshots"] += 1
         if level not in ("emergency", "regular"):
+            continue
+        if last is not None and quote["price"] == last[0] \
+                and quote["prev_close"] == last[1]:
+            summary["stale_skipped"] += 1
             continue
         summary["triggers"] += 1
         passed, blocked_by = gates.evaluate(config, conn, symbol, level, cfg,
