@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 BEIJING = ZoneInfo("Asia/Shanghai")
 EASTERN = ZoneInfo("America/New_York")
 
-DEFAULT_DAILY_LIMIT = 3
+DEFAULT_DAILY_LIMIT = 2  # 2026-11-13 用户定：每天最多 2 次触发（按触发次数算）
 DEFAULT_COOLDOWN_MINUTES = 30
 DEFAULT_DEDUP_HOURS = 2
 
@@ -76,8 +76,11 @@ def in_trading_session(symbol, now=None):
     return evening or morning
 
 
-def evaluate(config, conn, symbol, level, symbol_cfg=None, now=None):
-    """按配置顺序过 7 道门。返回 (passed, blocked_by)。"""
+def evaluate(config, conn, symbol, level, symbol_cfg=None, now=None,
+               move=None, is_bp=False):
+    """按配置顺序过 7 道门。返回 (passed, blocked_by)。
+    move / is_bp 供 daily_limit 的两档提醒规则用（2026-11-13 用户定）：
+    每标的每天最多 2 次触发，第 2 次须变动 ≥2 倍常规阈值且档位高于上次。"""
     bj = _beijing(now)
     gates = config.get("gate_chain", {})
     order = gates.get("order", ["enabled", "not_expired", "trading_session",
@@ -100,11 +103,29 @@ def evaluate(config, conn, symbol, level, symbol_cfg=None, now=None):
             if not in_trading_session(symbol, bj):
                 return False, "trading_session"
         elif gate == "daily_limit":
+            # 两档提醒（2026-11-13 用户定）：按触发次数算（只数“异动提醒”
+            # 行，不计辩论结论行），每天最多 2 次；第 2 次须变动 ≥2 倍
+            # 常规阈值且档位高于上次触发，否则拦下。档位：1=[1x,2x)，
+            # 2=[2x,+∞)。无阈值配置或 move 未传时，退化为只看次数。
             limit = gates.get("daily_limit", DEFAULT_DAILY_LIMIT)
-            from ledger.ledger import count_alerts_today
-            if count_alerts_today(conn, symbol,
-                                  bj.strftime("%Y-%m-%d")) >= limit:
+            from ledger.ledger import (count_trigger_alerts_today,
+                                       get_last_trigger_alert)
+            today = bj.strftime("%Y-%m-%d")
+            n = count_trigger_alerts_today(conn, symbol, today)
+            if n >= limit:
                 return False, "daily_limit"
+            if n == 1 and move is not None:
+                regular = cfg.get("regular_bp") if is_bp else cfg.get(
+                    "regular")
+                if regular:
+                    cur_band = 2 if abs(move) >= 2 * regular else 1
+                    last = get_last_trigger_alert(conn, symbol)
+                    if last is not None and last[1] is not None:
+                        last_band = 2 if abs(last[1]) >= 2 * regular else 1
+                        if cur_band <= last_band:
+                            return False, "escalation"
+                    elif cur_band < 2:
+                        return False, "escalation"
         elif gate == "cooldown":
             minutes = gates.get("cooldown_minutes", DEFAULT_COOLDOWN_MINUTES)
             from ledger.ledger import count_alerts_since
