@@ -147,6 +147,27 @@ def count_alerts_today(conn, symbol, date_prefix):
     return row[0] if row else 0
 
 
+def count_trigger_alerts_today(conn, symbol, date_prefix):
+    """当日该标的“异动提醒”行数（只计触发，不计辩论结论行）。
+    一次触发写两行（提醒 + 辩论结论），两档提醒规则按触发次数算，
+    故只数标题为“异动提醒”的行。"""
+    row = conn.execute(
+        "SELECT COUNT(*) FROM alerts WHERE symbol = ? AND ts LIKE ?"
+        " AND title LIKE '异动提醒%'",
+        (symbol, date_prefix + "%")).fetchone()
+    return row[0] if row else 0
+
+
+def get_last_trigger_alert(conn, symbol):
+    """某标的最近一条“异动提醒”的 (ts, pct)，无记录返回 None。
+    pct 列存的是变动（bp 型存基点，pct 型存百分比）。"""
+    row = conn.execute(
+        "SELECT ts, pct FROM alerts WHERE symbol = ?"
+        " AND title LIKE '异动提醒%' ORDER BY id DESC LIMIT 1",
+        (symbol,)).fetchone()
+    return row if row else None
+
+
 def count_judgments(conn, kind, date_prefix, symbol=None):
     """当日某类研判数；symbol 指定时只计该标的（日配额用）。"""
     if symbol is None:
