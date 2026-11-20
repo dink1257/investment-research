@@ -117,8 +117,9 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
             summary["stale_skipped"] += 1
             continue
         summary["triggers"] += 1
-        passed, blocked_by = gates.evaluate(config, conn, symbol, level, cfg,
-                                            now)
+        passed, blocked_by = gates.evaluate(
+            config, conn, symbol, level, cfg, now, move=move,
+            is_bp=(cfg.get("unit") == "bp"))
         if not passed:
             summary["blocked"][blocked_by] = \
                 summary["blocked"].get(blocked_by, 0) + 1
