@@ -62,8 +62,10 @@ def main():
     assert summary2["dry_run_alerts"] == 0, summary2
     assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
     # ---- 价变了再跑一轮 -> 门控拦截（冷却），不重复预警 ----
+    # 变动须升档到 2 倍阈值以上（10% ≥ 2×4.5%），否则先被两档规则的
+    # escalation 拦住、到不了冷却门；升档后 escalation 放行，冷却拦截。
     mon.fetch_symbol = lambda s, proxies=None: (
-        {"symbol": s, "price": 106.0, "prev_close": 100.0, "pct": 6.0,
+        {"symbol": s, "price": 110.0, "prev_close": 100.0, "pct": 10.0,
          "source": "yahoo"}, False, False) if s == "BTC-USD" else (None, False,
                                                                False)
     summary2b = mon.run_cycle(make_config(hb), conn, ["BTC-USD"], dry_run=True)
