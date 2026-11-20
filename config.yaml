@@ -530,3 +530,6 @@ gate_chain:
   - cooldown
   - dedup
   - quiet_hours
+  # 两档提醒（2026-11-13 用户定）：每标的每天最多 2 次触发，
+  # 第 2 次须变动 ≥2 倍常规阈值且档位高于上次。按触发次数算。
+  daily_limit: 2
