@@ -34,7 +34,7 @@ from push import push as push_mod
 
 BEIJING = ZoneInfo("Asia/Shanghai")
 DEDUP_HOURS = 24
-SIMILARITY = 0.85
+SIMILARITY = 0.80
 
 
 def grade_title(title, grades):
