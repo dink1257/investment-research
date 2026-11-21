@@ -75,7 +75,10 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
                "disagreements": [], "errors": [],
                "debates_run": 0, "debates_blocked": {},
                "debates_errored": 0, "verdicts_pushed": 0,
-               "verdicts_dry_run": 0, "stale_skipped": 0}
+               "verdicts_dry_run": 0, "stale_skipped": 0,
+               # 逐标的明细（2026-11-21：摘要只有计数，查不出哪几
+               # 个标的重复告警）：每轮发了谁、拦了谁、当日第几次。
+               "alerts": [], "blocked_list": [], "verdicts": []}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         fetched = list(pool.map(
             partial(fetch_symbol, proxies=proxies), symbols))
@@ -117,12 +120,21 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
             summary["stale_skipped"] += 1
             continue
         summary["triggers"] += 1
+        # 逐标的明细：评估时当日已触发次数（门控看到的 n；若账本
+        # 丢了前面的触发，这里就是 0，第二次会被当成第一次放行）。
+        n_today = ledger_mod.count_trigger_alerts_today(
+            conn, symbol, now.strftime("%Y-%m-%d"))
+        unit = "bp" if cfg.get("unit") == "bp" else "pct"
         passed, blocked_by = gates.evaluate(
             config, conn, symbol, level, cfg, now, move=move,
             is_bp=(cfg.get("unit") == "bp"))
         if not passed:
             summary["blocked"][blocked_by] = \
                 summary["blocked"].get(blocked_by, 0) + 1
+            summary["blocked_list"].append({
+                "symbol": symbol, "blocked_by": blocked_by,
+                "level": level, "move": move, "unit": unit,
+                "triggers_today": n_today})
             continue
         if cfg.get("unit") == "bp":
             move_txt = f"{move:+.0f}bp（常规 ±{cfg['regular_bp']}bp / " \
@@ -144,8 +156,14 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
                                 dry_run=1 if is_dry else 0)
         if is_dry:
             summary["dry_run_alerts"] += 1
+            summary["alerts"].append({
+                "symbol": symbol, "level": level, "move": move,
+                "unit": unit, "triggers_today_before": n_today})
         elif delivered:
             summary["alerts_sent"] += 1
+            summary["alerts"].append({
+                "symbol": symbol, "level": level, "move": move,
+                "unit": unit, "triggers_today_before": n_today})
         else:
             summary["errors"].append(f"{symbol}: 推送全部失败（{level}）")
         # 辩论（方案 §3.1 第 5-7 步）：过门控的触发才开辩论；结论写账本
@@ -176,8 +194,14 @@ def run_cycle(config, conn, symbols, dry_run=False, workers=10):
                                     dry_run=1 if v_dry else 0)
             if v_dry:
                 summary["verdicts_dry_run"] += 1
+                summary["verdicts"].append({
+                    "symbol": symbol, "level": level, "move": move,
+                    "unit": unit})
             elif v_delivered:
                 summary["verdicts_pushed"] += 1
+                summary["verdicts"].append({
+                    "symbol": symbol, "level": level, "move": move,
+                    "unit": unit})
             else:
                 summary["errors"].append(
                     f"{symbol}: 辩论结论推送失败（{level}）")
