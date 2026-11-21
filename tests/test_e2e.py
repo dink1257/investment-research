@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -74,6 +76,11 @@ def main():
     llm_mod.call_qwen = MockLLM([DEBATE_OK])
     try:
         conn = ledger_mod.init_db(":memory:")
+        # 诱因（2026-11-13 实质性门）：常规档且无诱因、变动 <1.5 倍
+        # 常规阈值时不开辩论；先记一条重要哨兵项，让辩论正常跑。
+        ledger_mod.record_sentinel(
+            conn, datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
+            "300750.SZ", "test", "宁德时代获重要订单", "important")
         summary = mon.run_cycle(cfg, conn, ["300750.SZ", "600519.SS"],
                                 dry_run=True)
     finally:
@@ -87,6 +94,13 @@ def main():
     assert summary["dry_run_alerts"] == 1, summary
     assert summary["errors"] == [], summary
     assert summary["debates_blocked"] == {}, summary
+    assert summary["alerts"] == [{"symbol": "300750.SZ", "level": "regular",
+                                  "move": 5.0, "unit": "pct",
+                                  "triggers_today_before": 0}], summary
+    assert summary["verdicts"] == [{"symbol": "300750.SZ",
+                                    "level": "regular", "move": 5.0,
+                                    "unit": "pct"}], summary
+    assert summary["blocked_list"] == [], summary
     with open(hb, encoding="utf-8") as f:
         assert json.load(f)["status"] == "ok"
     # 账本：1 条辩论研判 + 2 条推送记录（阈值告警 + 辩论结论）
@@ -100,8 +114,17 @@ def main():
     assert alerts[1][0].startswith("辩论研判：宁德时代"), alerts
     assert all(r[1] == 1 for r in alerts), alerts
 
-    # 第二轮立即再跑：冷却拦住阈值告警，辩论也不跑（门控在辩论之前）
-    mon.fetch_symbol = fetch_stub
+    # 第二轮立即再跑：价格变了（不触发 stale 守卫）且变动升档到 2 倍
+    # 常规阈值以上（10% ≥ 2×4.72%），escalation 放行、冷却拦住阈值告警，
+    # 辩论也不跑（门控在辩论之前）。
+    def fetch_stub2(symbol, proxies=None):
+        if symbol == "300750.SZ":
+            return ({"symbol": symbol, "price": 275.0, "prev_close": 250.0,
+                     "pct": 10.0, "source": "yahoo"}, False, False)
+        return ({"symbol": symbol, "price": 1700.0, "prev_close": 1690.0,
+                 "pct": 0.59, "source": "yahoo"}, False, False)
+
+    mon.fetch_symbol = fetch_stub2
     mon.gates.in_trading_session = lambda *a, **k: True
     llm_mod.call_qwen = MockLLM([DEBATE_OK])
     try:
@@ -112,6 +135,11 @@ def main():
         llm_mod.call_qwen = orig_call
     assert summary2["triggers"] == 1, summary2
     assert summary2["blocked"] == {"cooldown": 1}, summary2
+    assert summary2["blocked_list"] == [{"symbol": "300750.SZ",
+                                         "blocked_by": "cooldown",
+                                         "level": "emergency", "move": 10.0,
+                                         "unit": "pct",
+                                         "triggers_today": 1}], summary2
     assert summary2["debates_run"] == 0, summary2
 
     # 深研报告渲染（CLI 的 Markdown 输出）
