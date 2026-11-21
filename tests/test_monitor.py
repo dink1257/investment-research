@@ -45,6 +45,10 @@ def main():
     assert summary["dry_run_alerts"] == 1, summary
     assert summary["snapshots"] == 1, summary
     assert summary["alerts_sent"] == 0, summary
+    assert summary["alerts"] == [{"symbol": "BTC-USD", "level": "regular",
+                                  "move": 5.0, "unit": "pct",
+                                  "triggers_today_before": 0}], summary
+    assert summary["blocked_list"] == [] and summary["verdicts"] == [], summary
     rows = conn.execute("SELECT symbol, level, pushed, dry_run FROM alerts"
                         ).fetchall()
     assert len(rows) == 1 and rows[0][1] == "regular" and rows[0][3] == 1, rows
@@ -72,6 +76,35 @@ def main():
     assert summary2b["triggers"] == 1, summary2b
     assert summary2b["dry_run_alerts"] == 0, summary2b
     assert summary2b["blocked"] == {"cooldown": 1}, summary2b
+    assert summary2b["blocked_list"] == [{"symbol": "BTC-USD",
+                                          "blocked_by": "cooldown",
+                                          "level": "emergency", "move": 10.0,
+                                          "unit": "pct",
+                                          "triggers_today": 1}], summary2b
+    # ---- 逐标的明细：第二次触发未升档 -> escalation 拦住并记入 blocked_list ----
+    # （2026-11-21：日志只有计数，查不出重复是哪几个标的；blocked_list
+    # 记下被拦的标的、原因与评估时当日已触发次数。）
+    conn_e = ledger_mod.init_db(":memory:")
+    mon.fetch_symbol = lambda s, proxies=None: (
+        {"symbol": s, "price": 105.0, "prev_close": 100.0, "pct": 5.0,
+         "source": "yahoo"}, False, False) if s == "BTC-USD" else (None, False,
+                                                               False)
+    s_e1 = mon.run_cycle(make_config(hb), conn_e, ["BTC-USD"], dry_run=True)
+    assert s_e1["alerts"] == [{"symbol": "BTC-USD", "level": "regular",
+                               "move": 5.0, "unit": "pct",
+                               "triggers_today_before": 0}], s_e1
+    assert s_e1["blocked_list"] == [] and s_e1["verdicts"] == [], s_e1
+    mon.fetch_symbol = lambda s, proxies=None: (
+        {"symbol": s, "price": 106.0, "prev_close": 100.0, "pct": 6.0,
+         "source": "yahoo"}, False, False) if s == "BTC-USD" else (None, False,
+                                                               False)
+    s_e2 = mon.run_cycle(make_config(hb), conn_e, ["BTC-USD"], dry_run=True)
+    assert s_e2["blocked"] == {"escalation": 1}, s_e2
+    assert s_e2["blocked_list"] == [{"symbol": "BTC-USD",
+                                     "blocked_by": "escalation",
+                                     "level": "regular", "move": 6.0,
+                                     "unit": "pct", "triggers_today": 1}], s_e2
+    assert s_e2["alerts"] == [] and s_e2["dry_run_alerts"] == 0, s_e2
     assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
     # 恢复原来那档 mock（105.0），供后面用例使用。
     mon.fetch_symbol = lambda s, proxies=None: (
@@ -129,6 +162,11 @@ def main():
     assert summary6["debates_run"] == 1, summary6
     assert summary6["verdicts_dry_run"] == 1, summary6
     assert summary6["debates_blocked"] == {}, summary6
+    assert summary6["alerts"] == [{"symbol": "BTC-USD", "level": "regular",
+                                   "move": 5.0, "unit": "pct",
+                                   "triggers_today_before": 0}], summary6
+    assert summary6["verdicts"] == [{"symbol": "BTC-USD", "level": "regular",
+                                     "move": 5.0, "unit": "pct"}], summary6
     rows5 = conn5.execute(
         "SELECT title, dry_run FROM alerts ORDER BY rowid").fetchall()
     assert len(rows5) == 2, rows5  # 阈值告警 + 辩论结论
