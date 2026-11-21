@@ -95,6 +95,17 @@ def main():
     assert not any("数据源告警" in t for t in alerts), alerts
     assert all(t.startswith("哨兵紧急") for t in alerts), alerts
 
+    # 5. 同事件不同标题去重（2026-11-21 中际旭创回购）：两篇东财新闻
+    # 标题相似度 0.833，阈值 0.85 时漏网、0.80 时合并。
+    conn2 = ledger_mod.init_db(":memory:")
+    ledger_mod.record_sentinel(
+        conn2, NOW.isoformat(), "300308.SZ", "akshare",
+        "中际旭创：董事长提议以20亿元—40亿元回购股份", "important", "")
+    assert sentinel_mod.is_dup(
+        conn2, "300308.SZ",
+        "中际旭创获董事长提议 拟斥资20亿至40亿元回购股份", NOW), \
+        "同事件不同标题应判重复"
+
     print("test_sentinel: all passed")
 
 
